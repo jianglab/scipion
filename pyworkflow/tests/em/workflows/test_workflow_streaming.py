@@ -33,15 +33,25 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pyworkflow.em.protocol import (ProtImportMovies, ProtMonitorSummary,
                                     ProtImportMicrographs, ProtImportAverages)
+
+from eman2.protocols import SparxGaussianProtPicking, EmanProtInitModel
+from relion.protocols import (ProtRelionExtractParticles,
+                              ProtRelion2Autopick)
 try:
-    from pyworkflow.em.packages.eman2 import SparxGaussianProtPicking
-    from pyworkflow.em.packages.grigoriefflab import ProtCTFFind
-    from pyworkflow.em.packages.relion import (ProtRelionExtractParticles,
-                                               ProtRelion2Autopick)
+    from grigoriefflab.protocols import ProtCTFFind
 except:
     pass
-from xmipp3.protocols import XmippProtOFAlignment, XmippProtMovieGain, XmippProtMovieMaxShift
-from pyworkflow.em import ImageHandler
+from xmipp3.protocols import (XmippProtOFAlignment, XmippProtMovieGain,
+                              XmippProtMovieMaxShift, XmippProtCTFMicrographs,
+                              XmippProtMovieCorr, XmippProtCTFConsensus,
+                              XmippProtPreprocessMicrographs,
+                              XmippProtConsensusPicking, XmippProtCL2D,
+                              XmippProtExtractParticles, XmippProtTriggerData,
+                              XmippProtEliminateEmptyParticles,
+                              XmippProtScreenParticles,
+                              XmippProtReconstructSignificant)
+from pyworkflow.em import ImageHandler, ProtUserSubSet
+from pyworkflow.em.protocol.protocol_sets import ProtUnionSet
 
 from pyworkflow.protocol import getProtocolFromDb
 import pyworkflow.utils as pwutils
@@ -615,7 +625,8 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.ds = DataSet.getDataSet('movies')
+        cls.ds = DataSet('relion13_tutorial', 'relion13_tutorial', '')
+        # cls.ds = dataSet.getDataSet('relion13_tutorial')
         cls.importThread = threading.Thread(target=cls._createInputLinks)
         cls.importThread.start()
         # Wait until the first link is created
@@ -624,12 +635,13 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
     @classmethod
     def _createInputLinks(cls):
         # Create a test folder path
-        pattern = PATTERN if PATTERN else cls.ds.getFile('ribo/Falcon*mrcs')
+        pattern = PATTERN if PATTERN else cls.ds.getFile('betagal/Micrographs/*mrcs')
         files = glob(pattern)
-        nFiles = len(files)
-        nMovies = MOVS
 
-        for i in range(nMovies):
+        # the amount of input data is defined here
+        nFiles = len(files)
+
+        for i in range(nFiles):
             # Loop over the number of input movies if we want more for testing
             f = files[i % nFiles]
             _, cls.ext = os.path.splitext(f)
@@ -678,22 +690,33 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
                                       samplingRate=3.54,
                                       dataStreaming=True,
                                       timeout=TIMEOUT)
-
-        self.proj.scheduleProtocol(protImport, wait=False)
+        self.proj.launchProtocol(protImport, wait=False)
         self._waitOutput(protImport, 'outputMovies')
 
         # ----------- MOVIE GAIN --------------------------
         protMG = self.newProtocol(XmippProtMovieGain,
-                                  objLabel='Movie gain')
-
+                                  objLabel='movie gain')
         protMG.inputMovies.set(protImport.outputMovies)
         protMG.useExistingGainImage.set(False)
-        self.proj.scheduleProtocol(protMG, wait=False)
-        self._waitOutput(protMG, 'outputMovies')
+        self.proj.launchProtocol(protMG, wait=False)
+
+        # ----------- CORR ALIGN ----------------------------
+        protCA = self.newProtocol(XmippProtMovieCorr,
+                                  objLabel='corr allignment')
+        protCA.inputMovies.set(protImport.outputMovies)
+        self.proj.launchProtocol(protCA, wait=False)
+        self._waitOutput(protCA, 'outputMovies')
+
+        # ----------- MAX SHIFT -----------------------------
+        protMax = self.newProtocol(XmippProtMovieMaxShift,
+                                   objLabel='max shift')
+        protMax.inputMovies.set(protCA.outputMovies)
+        self.proj.launchProtocol(protMax, wait=False)
+        self._waitOutput(protMax, 'outputMovies')
 
         # ----------- OF ALIGNMENT --------------------------
         protOF = self.newProtocol(XmippProtOFAlignment,
-                                  objLabel='OF alignment',
+                                  objLabel='of alignment',
                                   doSaveMovie=False,
                                   alignFrame0=3,
                                   alignFrameN=10,
@@ -702,15 +725,191 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
                                   useAlignToSum=False,
                                   useAlignment=False,
                                   doApplyDoseFilter=False)
-
-        protOF.inputMovies.set(protMG.outputMovies)
-        self.proj.scheduleProtocol(protOF, wait=False)
+        protOF.inputMovies.set(protMax.outputMovies)
+        self.proj.launchProtocol(protOF, wait=False)
         self._waitOutput(protOF, 'outputMicrographs')
 
-        # --------- CTF ESTIMATION ---------------------------
+        # --------- PREPROCESS MICS ---------------------------
+        protDown = self.newProtocol(XmippProtPreprocessMicrographs,
+                                    objLabel='downsample (1.5x)',
+                                    doDownsample=True, downFactor=1.5,
+                                    doInvert=True, doCrop=False, runMode=1)
+        protDown.inputMicrographs.set(protOF.outputMicrographs)
+        self.proj.launchProtocol(protDown, wait=False)
+        self._waitOutput(protDown, 'outputMicrographs')
 
-        protCTF = self.newProtocol(ProtCTFFind,
-                                   objLabel='ctffind4')
-        protCTF.inputMicrographs.set(protOF.outputMicrographs)
-        self.proj.scheduleProtocol(protCTF, wait=False)
-        self._waitOutput(protCTF, 'outputCTF')
+        # --------- CTF ESTIMATION 1 ---------------------------
+        protCTF1 = self.newProtocol(XmippProtCTFMicrographs,
+                                    objLabel='ctf estimation 1')
+        protCTF1.inputMicrographs.set(protDown.outputMicrographs)
+        self.proj.launchProtocol(protCTF1, wait=False)
+        self._waitOutput(protCTF1, 'outputCTF')
+
+        # --------- CTF ESTIMATION 2 ---------------------------
+        protCTF2 = self.newProtocol(XmippProtCTFMicrographs,
+                                    objLabel='ctf estimation 2')
+        protCTF2.inputMicrographs.set(protDown.outputMicrographs)
+        self.proj.launchProtocol(protCTF2, wait=False)
+        self._waitOutput(protCTF2, 'outputCTF')
+
+        # --------- CTF CONSENSUS ---------------------------
+        protCONS = self.newProtocol(XmippProtCTFConsensus,
+                                    objLabel='ctf consensus',
+                                    useDefocus=False,
+                                    useAstigmatism=False,
+                                    resolution=17.0,
+                                    minConsResol=15.0
+                                    )
+        protCONS.inputCTF.set(protCTF1.outputCTF)
+        protCONS.inputCTF2.set(protCTF2.outputCTF)
+        self.proj.launchProtocol(protCONS, wait=False)
+        self._waitOutput(protCONS, 'outputMicrographs')
+
+        # --------- PARTICLE PICKING 1 ---------------------------
+        protPP1 = self.newProtocol(SparxGaussianProtPicking,
+                                  objLabel='particle picking 1',
+                                  boxSize=50)
+        protPP1.inputMicrographs.set(protCONS.outputMicrographs)
+        self.proj.launchProtocol(protPP1, wait=False)
+        self._waitOutput(protPP1, 'outputCoordinates')
+
+        # --------- PARTICLE PICKING 2 ---------------------------
+        protPP2 = self.newProtocol(SparxGaussianProtPicking,
+                                  objLabel='particle picking 2',
+                                  boxSize=50)
+        protPP2.inputMicrographs.set(protCONS.outputMicrographs)
+        self.proj.launchProtocol(protPP2, wait=False)
+        self._waitOutput(protPP2, 'outputCoordinates')
+
+        # --------- CONSENSUS PICKING ---------------------------
+        protCP = self.newProtocol(XmippProtConsensusPicking,
+                                  objLabel='consensus picking')
+        protCP.inputCoordinates.set([protPP1.outputCoordinates,
+                                     protPP2.outputCoordinates])
+        self.proj.launchProtocol(protCP, wait=False)
+        self._waitOutput(protCP, 'consensusCoordinates')
+
+        # --------- EXTRACT PARTICLES ---------------------------
+        protExtract = self.newProtocol(XmippProtExtractParticles,
+                                       objLabel='extract particles',
+                                       boxSize=50,
+                                       downsampleType=0,
+                                       doRemoveDust=False,
+                                       doNormalize=False,
+                                       doInvert=False,
+                                       doFlip=False)
+        protExtract.inputCoordinates.set(protCP.consensusCoordinates)
+        protExtract.inputMicrographs.set(protCONS.outputMicrographs)
+        self.proj.launchProtocol(protExtract, wait=False)
+        self._waitOutput(protExtract, 'outputParticles')
+
+        # --------- ELIM EMPTY PARTS ---------------------------
+        protEEP = self.newProtocol(XmippProtEliminateEmptyParticles,
+                                   objLabel='elim empty particles',
+                                   inputType=0)
+        protEEP.inputParticles.set(protExtract.outputParticles)
+        self.proj.launchProtocol(protEEP, wait=False)
+        self._waitOutput(protEEP, 'outputParticles')
+
+        ###############################################################
+        # -- NEXT 2 PROTOCOLS ARE NOT NECESSARY FOR INITIAL VOLUME -- #
+        ###############################################################
+        # --------- TRIGGER PARTS ---------------------------
+        protTRIG = self.newProtocol(XmippProtTriggerData,
+                                    objLabel='trigger data',
+                                    outputSize=1000, delay=30,
+                                    allParticles=True,
+                                    splitParticles=False)
+        protTRIG.inputParticles.set(protEEP.outputParticles)
+        self.proj.launchProtocol(protTRIG, wait=False)
+        self._waitOutput(protTRIG, 'outputParticles')
+        #
+        # --------- SCREEN PARTS ---------------------------
+        protSCR = self.newProtocol(XmippProtScreenParticles,
+                                    objLabel='screen particles')
+        protSCR.inputParticles.set(protTRIG.outputParticles)
+        self.proj.launchProtocol(protSCR, wait=False)
+        self._waitOutput(protSCR, 'outputParticles')
+        ###############################################################
+
+        # --------- TRIGGER PARTS ---------------------------
+        protTRIG2 = self.newProtocol(XmippProtTriggerData,
+                                     objLabel='another trigger data',
+                                     outputSize=2000, delay=30,
+                                     allParticles=False,
+                                     splitParticles=False)
+        protTRIG2.inputParticles.set(protSCR.outputParticles)
+        self.proj.launchProtocol(protTRIG2, wait=False)
+        self._waitOutput(protTRIG2, 'outputParticles')
+
+
+        # CL2Ds could be run in parallel, potential problem with
+        # convertion to averages: "set of averages 1" should be
+        # run after "cl2d 1" is finished and the same for
+        # "set of averages 2", additional checks are needed
+
+        # --------- CL2D 1 ---------------------------
+        protCL = self.newProtocol(XmippProtCL2D, objLabel='cl2d 1',
+                                  numberOfClasses=8, numberOfMpi=8)
+        protCL.inputParticles.set(protTRIG2.outputParticles)
+        self.proj.launchProtocol(protCL, wait=False)
+        self._waitOutput(protCL, 'outputClasses')
+
+        # --------- CL2D 2 ---------------------------
+        protCL2 = self.newProtocol(XmippProtCL2D, objLabel='cl2d 2',
+                                   numberOfClasses=8, numberOfMpi=8)
+        protCL2.inputParticles.set(protTRIG2.outputParticles)
+        self.proj.launchProtocol(protCL2, wait=False)
+        self._waitOutput(protCL2, 'outputClasses')
+
+        # --------- CONVERT TO AVERAGES 1---------------------------
+        protAVER1 = self.newProtocol(ProtUserSubSet,
+                                     objLabel='set of averages 1',
+                                     outputClassName="SetOfAverages",
+                                     sqliteFile=os.path.join(
+                                         protCL._getPath(),
+                                         "classes2D.sqlite,"))
+        protAVER1.inputObject.set(protCL.outputClasses)
+        self.proj.launchProtocol(protAVER1, wait=False)
+        self._waitOutput(protAVER1, 'outputRepresentatives')
+
+        # --------- CONVERT TO AVERAGES 2---------------------------
+        protAVER2 = self.newProtocol(ProtUserSubSet,
+                                     objLabel='set of averages 2',
+                                     outputClassName="SetOfAverages",
+                                     sqliteFile=os.path.join(
+                                         protCL2._getPath(),
+                                         "classes2D.sqlite,"))
+        protAVER2.inputObject.set(protCL2.outputClasses)
+        self.proj.launchProtocol(protAVER2, wait=False)
+        self._waitOutput(protAVER2, 'outputRepresentatives')
+
+        # --------- JOIN SETS ---------------------------
+        protJOIN = self.newProtocol(ProtUnionSet, objLabel='join sets')
+        protJOIN.inputSets.append(protAVER1.outputRepresentatives)
+        protJOIN.inputSets.append(protAVER2.outputRepresentatives)
+        self.proj.launchProtocol(protJOIN, wait=False)
+        self._waitOutput(protJOIN, 'outputSet')
+
+        # --------- AUTO CLASS SELECTION ---------------------------
+        protCLSEL = self.newProtocol(XmippProtEliminateEmptyParticles,
+                                     objLabel='auto class selection',
+                                     inputType=1,
+                                     threshold=8.0)
+        protCLSEL.inputParticles.set(protJOIN.outputSet)
+        protCLSEL.inputAverages.set(protJOIN.outputSet)
+        self.proj.launchProtocol(protCLSEL, wait=False)
+        self._waitOutput(protCLSEL, 'outputParticles')
+
+        # --------- INITIAL VOLUME ---------------------------
+        protINITVOL = self.newProtocol(EmanProtInitModel,
+                                       objLabel='initial vol')
+        protINITVOL.inputSet.set(protCLSEL.outputParticles)
+        self.proj.launchProtocol(protINITVOL, wait=False)
+
+        # --------- RECONSTRUCT SIGNIFICANT ---------------------------
+        protSIG = self.newProtocol(XmippProtReconstructSignificant,
+                                   objLabel='reconstruct significant',
+                                   iter=15)
+        protSIG.inputSet.set(protCLSEL.outputParticles)
+        self.proj.launchProtocol(protSIG, wait=True)
