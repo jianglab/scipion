@@ -909,13 +909,15 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
 
         # --------- INITIAL VOLUME ---------------------------
         protINITVOL = self.newProtocol(EmanProtInitModel,
-                                       objLabel='initial vol')
+                                       objLabel='initial vol',
+                                       symmetryGroup='d2')
         protINITVOL.inputSet.set(protCLSEL.outputParticles)
         self.proj.launchProtocol(protINITVOL, wait=False)
 
         # --------- RECONSTRUCT SIGNIFICANT ---------------------------
         protSIG = self.newProtocol(XmippProtReconstructSignificant,
                                    objLabel='reconstruct significant',
-                                   iter=15)
+                                   symmetryGroup='d2',
+                                   iter=30)
         protSIG.inputSet.set(protCLSEL.outputParticles)
         self.proj.launchProtocol(protSIG, wait=True)
