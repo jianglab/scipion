@@ -31,30 +31,35 @@ import socket
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
+import pyworkflow.utils as pwutils
 from pyworkflow.em.protocol import (ProtImportMovies, ProtMonitorSummary,
                                     ProtImportMicrographs, ProtImportAverages)
 
-from eman2.protocols import SparxGaussianProtPicking, EmanProtInitModel
-from relion.protocols import (ProtRelionExtractParticles,
-                              ProtRelion2Autopick)
+SparxGaussianProtPicking = pwutils.importFromPlugin('eman2.protocols', 'SparxGaussianProtPicking')
+EmanProtInitModel = pwutils.importFromPlugin('eman2.protocols', 'EmanProtInitModel')
+
+ProtRelionExtractParticles = pwutils.importFromPlugin('relion.protocols', 'ProtRelionExtractParticles')
+ProtRelion2Autopick = pwutils.importFromPlugin('relion.protocols', 'ProtRelion2Autopick')
+
+ProtCTFFind = pwutils.importFromPlugin('grigoriefflab.protocols', 'ProtCTFFind')
+
 try:
-    from grigoriefflab.protocols import ProtCTFFind
+    from xmipp3.protocols import (XmippProtOFAlignment, XmippProtMovieGain,
+                                  XmippProtMovieMaxShift, XmippProtCTFMicrographs,
+                                  XmippProtMovieCorr, XmippProtCTFConsensus,
+                                  XmippProtPreprocessMicrographs,
+                                  XmippProtConsensusPicking, XmippProtCL2D,
+                                  XmippProtExtractParticles, XmippProtTriggerData,
+                                  XmippProtEliminateEmptyParticles,
+                                  XmippProtScreenParticles,
+                                  XmippProtReconstructSignificant)
 except:
-    pass
-from xmipp3.protocols import (XmippProtOFAlignment, XmippProtMovieGain,
-                              XmippProtMovieMaxShift, XmippProtCTFMicrographs,
-                              XmippProtMovieCorr, XmippProtCTFConsensus,
-                              XmippProtPreprocessMicrographs,
-                              XmippProtConsensusPicking, XmippProtCL2D,
-                              XmippProtExtractParticles, XmippProtTriggerData,
-                              XmippProtEliminateEmptyParticles,
-                              XmippProtScreenParticles,
-                              XmippProtReconstructSignificant)
+     pwutils.pluginNotFound('xmipp')
+
 from pyworkflow.em import ImageHandler, ProtUserSubSet
 from pyworkflow.em.protocol.protocol_sets import ProtUnionSet
 
 from pyworkflow.protocol import getProtocolFromDb
-import pyworkflow.utils as pwutils
 
 
 # Load the number of movies for the simulation, by default equal 5, but
@@ -903,13 +908,16 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
 
         # --------- INITIAL VOLUME ---------------------------
         protINITVOL = self.newProtocol(EmanProtInitModel,
-                                       objLabel='initial vol')
+                                       objLabel='initial vol',
+                                       symmetryGroup='d2')
         protINITVOL.inputSet.set(protCLSEL.outputParticles)
         self.proj.launchProtocol(protINITVOL, wait=False)
 
         # --------- RECONSTRUCT SIGNIFICANT ---------------------------
         protSIG = self.newProtocol(XmippProtReconstructSignificant,
                                    objLabel='reconstruct significant',
-                                   iter=15)
+                                   symmetryGroup='d2',
+                                   iter=30)  # iter=15)
         protSIG.inputSet.set(protCLSEL.outputParticles)
         self.proj.launchProtocol(protSIG, wait=True)
+
