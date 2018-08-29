@@ -327,7 +327,7 @@ scipy = env.addPipModule('scipy', '0.14.0',
 env.addPipModule('bibtexparser', '0.6.2')
 env.addPipModule('django', '1.5.5')
 env.addPipModule('Pillow', '2.5.1', target='Pillow-2.5.1*',
-    deps=[jpeg])
+    deps=[jpeg, tiff])
 
 
 # Optional python modules
@@ -401,6 +401,15 @@ env.addPackage('eman', version='2.11',
 env.addPackage('eman', version='2.12',
                tar='eman2.12.linux64.tgz',
                commands=eman2_commands)
+
+SW_EM = env.getEmFolder()
+
+eman22_commands = [('./eman2.21.linux64.centos7.sh -b -p "%s/eman-2.21"' %
+                    SW_EM, '%s/eman-2.21/bin/python' % SW_EM)]
+
+env.addPackage('eman', version='2.21',
+               tar='eman2.21.linux64.centos7.tgz',
+               commands=eman22_commands)
 
 env.addPackage('localrec', version='1.1.0',
                tar='localrec-1.1.0.tgz')
