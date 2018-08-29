@@ -521,9 +521,12 @@ class ProtExtractParticles(ProtParticles):
         self.debug('   streamMode: %s' % streamMode)
 
         if self.finished:  # Unlock createOutputStep if finished all jobs
+
+            # Close the output set
+            self._updateOutputPartSet([], Set.STREAM_CLOSED)
             outputStep = self._getFirstJoinStep()
             if outputStep and outputStep.isWaiting():
-                outputStep.setStatus(STATUS_NEW)
+		outputStep.setStatus(STATUS_NEW)
 
     def readPartsFromMics(self, micDoneList, outputParts):
         """ This method should be implemented in subclasses to read
