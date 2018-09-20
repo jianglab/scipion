@@ -182,7 +182,7 @@ png = env.addLibrary(
     'png',
     tar='libpng-1.6.16.tgz',
     deps=[zlib],
-    default=False)
+    default=True)
 
 tiff = env.addLibrary(
      'tiff',
@@ -439,6 +439,9 @@ env.addPackage('motioncor2', version='1.0.2',
 
 env.addPackage('motioncor2', version='1.0.5',
                tar='motioncor2-1.0.5.tgz')
+
+env.addPackage('motioncor2', version='1.1.0',
+               tar='motioncor2-1.1.0.tgz')
 
 env.addPackage('simple', version='2.1',
                tar='simple2.tgz')
