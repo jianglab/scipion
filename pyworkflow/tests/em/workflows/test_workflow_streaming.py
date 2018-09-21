@@ -630,8 +630,8 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.ds = DataSet('relion13_tutorial', 'relion13_tutorial', '')
-        # cls.ds = dataSet.getDataSet('relion13_tutorial')
+        cls.ds = DataSet('relion21_tutorial', 'relion21_tutorial', '')
+        # cls.ds = DataSet.getDataSet('relion21_tutorial')
         cls.importThread = threading.Thread(target=cls._createInputLinks)
         cls.importThread.start()
         # Wait until the first link is created
