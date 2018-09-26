@@ -631,7 +631,7 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet('relion21_tutorial', 'relion21_tutorial', '')
-        # cls.ds = DataSet.getDataSet('relion21_tutorial')
+        cls.ds = DataSet.getDataSet('relion21_tutorial')
         cls.importThread = threading.Thread(target=cls._createInputLinks)
         cls.importThread.start()
         # Wait until the first link is created
@@ -706,54 +706,60 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
         self.proj.launchProtocol(protMG, wait=False)
 
         # ----------- CORR ALIGN ----------------------------
-        protCA = self.newProtocol(XmippProtMovieCorr,
-                                  objLabel='corr allignment')
+        # protCA = self.newProtocol(XmippProtMovieCorr,
+        #                           objLabel='corr allignment')
+        # protCA.inputMovies.set(protImport.outputMovies)
+        # self.proj.launchProtocol(protCA, wait=False)
+        # self._waitOutput(protCA, 'outputMovies')
+        protMC = self.newProtocol(ProtMotionCorr,
+                                  objLabel='motioncor2')
         protCA.inputMovies.set(protImport.outputMovies)
-        self.proj.launchProtocol(protCA, wait=False)
-        self._waitOutput(protCA, 'outputMovies')
+        self.proj.launchProtocol(protMC, wait=False)
+        self._waitOutput(protMC2, 'outputMovies')
 
         # ----------- MAX SHIFT -----------------------------
         protMax = self.newProtocol(XmippProtMovieMaxShift,
                                    objLabel='max shift')
-        protMax.inputMovies.set(protCA.outputMovies)
+        protMax.inputMovies.set(protMC.outputMovies)
         self.proj.launchProtocol(protMax, wait=False)
-        self._waitOutput(protMax, 'outputMovies')
+        self._waitOutput(protMax, 'outputMicrographs')
 
         # ----------- OF ALIGNMENT --------------------------
-        protOF = self.newProtocol(XmippProtOFAlignment,
-                                  objLabel='of alignment',
-                                  doSaveMovie=False,
-                                  alignFrame0=3,
-                                  alignFrameN=10,
-                                  sumFrame0=3,
-                                  sumFrameN=10,
-                                  useAlignToSum=False,
-                                  useAlignment=False,
-                                  doApplyDoseFilter=False)
-        protOF.inputMovies.set(protMax.outputMovies)
-        self.proj.launchProtocol(protOF, wait=False)
-        self._waitOutput(protOF, 'outputMicrographs')
+        # not needed since motioncor2 is used
+        # protOF = self.newProtocol(XmippProtOFAlignment,
+        #                           objLabel='of alignment',
+        #                           doSaveMovie=False,
+        #                           alignFrame0=3,
+        #                           alignFrameN=10,
+        #                           sumFrame0=3,
+        #                           sumFrameN=10,
+        #                           useAlignToSum=False,
+        #                           useAlignment=False,
+        #                           doApplyDoseFilter=False)
+        # protOF.inputMovies.set(protMax.outputMovies)
+        # self.proj.launchProtocol(protOF, wait=False)
+        # self._waitOutput(protOF, 'outputMicrographs')
 
         # --------- PREPROCESS MICS ---------------------------
-        protDown = self.newProtocol(XmippProtPreprocessMicrographs,
-                                    objLabel='downsample (1.5x)',
-                                    doDownsample=True, downFactor=1.5,
+        protInv = self.newProtocol(XmippProtPreprocessMicrographs,
+                                    objLabel='invert contrast',
+                                    # doDownsample=True, downFactor=1.5,
                                     doInvert=True, doCrop=False, runMode=1)
-        protDown.inputMicrographs.set(protOF.outputMicrographs)
-        self.proj.launchProtocol(protDown, wait=False)
-        self._waitOutput(protDown, 'outputMicrographs')
+        protInv.inputMicrographs.set(protMax.outputMicrographs)
+        self.proj.launchProtocol(protInv, wait=False)
+        self._waitOutput(protInv, 'outputMicrographs')
 
         # --------- CTF ESTIMATION 1 ---------------------------
         protCTF1 = self.newProtocol(XmippProtCTFMicrographs,
-                                    objLabel='ctf estimation 1')
-        protCTF1.inputMicrographs.set(protDown.outputMicrographs)
+                                    objLabel='XMIPP ctf estimation')
+        protCTF1.inputMicrographs.set(protInv.outputMicrographs)
         self.proj.launchProtocol(protCTF1, wait=False)
         self._waitOutput(protCTF1, 'outputCTF')
 
         # --------- CTF ESTIMATION 2 ---------------------------
-        protCTF2 = self.newProtocol(XmippProtCTFMicrographs,
-                                    objLabel='ctf estimation 2')
-        protCTF2.inputMicrographs.set(protDown.outputMicrographs)
+        protCTF2 = self.newProtocol(ProtCTFFind,
+                                    objLabel='CTFFIND estimation')
+        protCTF2.inputMicrographs.set(protInv.outputMicrographs)
         self.proj.launchProtocol(protCTF2, wait=False)
         self._waitOutput(protCTF2, 'outputCTF')
 
@@ -772,15 +778,15 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
 
         # --------- PARTICLE PICKING 1 ---------------------------
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
-                                  objLabel='particle picking 1',
+                                  objLabel='SPARX particle picking',
                                   boxSize=50)
         protPP1.inputMicrographs.set(protCONS.outputMicrographs)
         self.proj.launchProtocol(protPP1, wait=False)
         self._waitOutput(protPP1, 'outputCoordinates')
 
         # --------- PARTICLE PICKING 2 ---------------------------
-        protPP2 = self.newProtocol(SparxGaussianProtPicking,
-                                  objLabel='particle picking 2',
+        protPP2 = self.newProtocol(DogPickerProtPicking,
+                                  objLabel='DOGPICKER particle picking',
                                   boxSize=50)
         protPP2.inputMicrographs.set(protCONS.outputMicrographs)
         self.proj.launchProtocol(protPP2, wait=False)
@@ -833,6 +839,9 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
         protSCR = self.newProtocol(XmippProtScreenParticles,
                                     objLabel='screen particles')
         protSCR.inputParticles.set(protTRIG.outputParticles)
+        protSCR.autoParRejection.set('MaxZscore')
+        protSCR.autoParRejectionSSNR.set('Percentage')
+        protSCR.autoParRejectionVar.set('Variance')
         self.proj.launchProtocol(protSCR, wait=False)
         self._waitOutput(protSCR, 'outputParticles')
         ###############################################################
@@ -854,14 +863,15 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
         # "set of averages 2", additional checks are needed
 
         # --------- CL2D 1 ---------------------------
-        protCL = self.newProtocol(XmippProtCL2D, objLabel='cl2d 1',
+        protCL = self.newProtocol(XmippProtCL2D, objLabel='cl2d',
                                   numberOfClasses=8, numberOfMpi=8)
         protCL.inputParticles.set(protTRIG2.outputParticles)
         self.proj.launchProtocol(protCL, wait=False)
         self._waitOutput(protCL, 'outputClasses')
 
         # --------- CL2D 2 ---------------------------
-        protCL2 = self.newProtocol(XmippProtCL2D, objLabel='cl2d 2',
+        protCL2 = self.newProtocol(ProtRelionClassify2D,
+                                   objLabel='relion 2D classification',
                                    numberOfClasses=8, numberOfMpi=8)
         protCL2.inputParticles.set(protTRIG2.outputParticles)
         self.proj.launchProtocol(protCL2, wait=False)
@@ -908,16 +918,46 @@ class TestPreprocessingWorkflowInStreaming(BaseTest):
 
         # --------- INITIAL VOLUME ---------------------------
         protINITVOL = self.newProtocol(EmanProtInitModel,
-                                       objLabel='initial vol',
+                                       objLabel='Eman initial vol',
                                        symmetryGroup='d2')
         protINITVOL.inputSet.set(protCLSEL.outputParticles)
-        self.proj.launchProtocol(protINITVOL, wait=False)
+        self.proj.launchProtocol(protINITVOL, wait=True)
 
         # --------- RECONSTRUCT SIGNIFICANT ---------------------------
         protSIG = self.newProtocol(XmippProtReconstructSignificant,
-                                   objLabel='reconstruct significant',
+                                   objLabel='Reconstruct significant',
                                    symmetryGroup='d2',
                                    iter=30)  # iter=15)
         protSIG.inputSet.set(protCLSEL.outputParticles)
         self.proj.launchProtocol(protSIG, wait=True)
+
+        # --------- RECONSTRUCT RANSAC ---------------------------
+        protRAN = self.newProtocol(XmippProtRansac,
+                                   objLabel='Ransac significant',
+                                   symmetryGroup='d2',
+                                   iter=30)  # iter=15)
+        protRAN.inputSet.set(protRAN.outputParticles)
+        self.proj.launchProtocol(protCLSEL, wait=True)
+
+        # --------- CREATING AN ALIGNED SET OF VOLUMES -----------
+        protAVOL = self.newProtocol(XmippProtRansac,
+                                     objLabel='Join and align volumes',
+                                     iter=30)  # iter=15)
+        protAVOL.inputReference.set(protSIG.outputVolume)
+        protAVOL.inputVolumes.append(protRAN.outputVolumes)
+        protAVOL.inputVolumes.append(protINITVOL.outputVolumes)
+        protAVOL.inputVolumes.append(protSIG.outputVolume)
+        self.proj.launchProtocol(protAVOL, wait=True)
+
+
+        # --------- SWARM CONSENSUS INITIAL VOLUME ---------------
+        protSWARM = self.newProtocol(XmippProtReconstructSwarm,
+                                     objLabel='Swarm initial volume',
+                                     symmetryGroup='d2')
+                                     # iter=30)  # iter=15)
+        protSWARM.inputParticles.set(protTRIG2.outputParticles)
+        protSWARM.inputVolumes.set(protAVOL.outputVolumes)
+        self.proj.launchProtocol(protSWARM, wait=True)
+
+
 
