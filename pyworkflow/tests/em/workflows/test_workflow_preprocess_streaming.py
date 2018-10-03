@@ -1,8 +1,8 @@
 # ***************************************************************************
 # *
-# * Authors:     J.M. de la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     David Maluenda (dmaluenda@cnb.csic.es) [1]
 # *
-# * [1] Science for Life Laboratory, Stockholm University
+# * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,10 @@
 # ***************************************************************************/
 
 # System imports
+import shutil
+
+import sys
+
 import time
 import os
 from glob import glob
@@ -104,6 +108,14 @@ class TestPreprocessStreamingWorkflow(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
+        # if os.path.exists(cls.proj.path):
+        #     print("\n >>> WARNING: 'cls.proj.path' already exists,\n"
+        #             "     do you want to overwrite it? >>> (YES/no) <<< ")
+        #     yesno = raw_input()
+        #     if yesno.lower() == 'no':
+        #         sys.exit(0)
+        #     else:
+        #         shutil.rmtree(cls.proj.path)
         cls.ds = DataSet('relion21_tutorial', 'relion21_tutorial', '')
         cls.ds = DataSet.getDataSet('relion21_tutorial')
         cls.importThread = threading.Thread(target=cls._createInputLinks)
@@ -308,7 +320,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         else:
             goodCtfs = protCONS
 
-
+        goodCtfs = alignedMicsLastProt
         # --------- PARTICLE PICKING 1 ---------------------------
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
                                   objLabel='SPARX particle picking',
