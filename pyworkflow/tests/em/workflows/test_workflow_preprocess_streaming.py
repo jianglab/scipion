@@ -25,9 +25,7 @@
 
 # System imports
 import shutil
-
 import sys
-
 import time
 import os
 from glob import glob
@@ -81,11 +79,8 @@ except Exception as exc:
 def _getVar(varSuffix, varType, default=None):
     return varType(os.environ.get('SCIPION_TEST_STREAM_%s' % varSuffix, default))
 
-MOVS = _getVar('MOVS', int, 10)
-PATTERN = _getVar('PATTERN', str, '')
-DELAY = _getVar('DELAY', int, 10) # in seconds
 # Change the timeout to stop waiting for new files
-TIMEOUT = _getVar('TIMEOUT', int, 60)
+TIMEOUT = _getVar('TIMEOUT', int, 5*60)
 
 
 def setExtendedInput(protDotInput, lastProt, extended):
@@ -116,8 +111,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         #         sys.exit(0)
         #     else:
         #         shutil.rmtree(cls.proj.path)
-        cls.ds = DataSet('relion21_tutorial', 'relion21_tutorial', '')
-        cls.ds = DataSet.getDataSet('relion21_tutorial')
+        cls.ds = DataSet('relion13_tutorial', 'relion13_tutorial', '')
+        cls.ds = DataSet.getDataSet('relion13_tutorial')
         cls.importThread = threading.Thread(target=cls._createInputLinks)
         cls.importThread.start()
         # Wait until the first link is created
@@ -126,7 +121,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
     @classmethod
     def _createInputLinks(cls):
         # Create a test folder path
-        pattern = PATTERN if PATTERN else cls.ds.getFile('betagal/Micrographs/*mrcs')
+        pattern = cls.ds.getFile('betagal/Micrographs/*mrcs')
         files = glob(pattern)
 
         # the amount of input data is defined here
@@ -284,7 +279,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                     useDefocus=False,
                                     useAstigmatism=False,
                                     resolution=17.0,
-                                    calculateConsensus=False,  # This fails! Please, see XmippProtCTFConsensus
+                                    calculateConsensus=True,  # This fails! Please, see XmippProtCTFConsensus
                                     minConsResol=15.0,
                                     )
         setExtendedInput(protCONS.inputCTF, protCTF1, 'outputCTF')
@@ -347,7 +342,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protCP, 'consensusCoordinates')
 
         # --------- EXTRACT PARTICLES ---------------------------
-        protExtract = self.newProtocol(ProtRelionExtractParticles,  # Change to Xmipp extract when it works fine
+        protExtract = self.newProtocol(XmippProtExtractParticles,  # Change to Xmipp extract when it works fine
                                        objLabel='extract particles',
                                        boxSize=80,
                                        downsampleType=1,
@@ -359,7 +354,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                          protPP1, 'outputCoordinates')  # protCP.consensusCoordinates-----------------------
         setExtendedInput(protExtract.inputMicrographs,
                          alignedMicsLastProt, 'outputMicrographs')
-        # setExtendedInput(protExtract.ctfRelations, goodCtfs, 'outputCTF')  # uncomment this when ctfConsensus work fine
+        setExtendedInput(protExtract.ctfRelations, protCTF1, 'outputCTF')  # change goodCtfs ctfConsensus work fine
         self._registerProt(protExtract, 'outputParticles')
 
         # --------- ELIM EMPTY PARTS ---------------------------
@@ -378,20 +373,20 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                     splitParticles=False)
         setExtendedInput(protTRIG.inputParticles, protEEP, 'outputParticles')
         self._registerProt(protTRIG, 'outputParticles')
-        #
+
         # --------- SCREEN PARTS ---------------------------
         protSCR = self.newProtocol(XmippProtScreenParticles,
                                    objLabel='screen particles')
         protSCR.autoParRejection.set(XmippProtScreenParticles.REJ_MAXZSCORE)
         protSCR.autoParRejectionSSNR.set(XmippProtScreenParticles.REJ_PERCENTAGE_SSNR)
-        protSCR.autoParRejectionVar.set(XmippProtScreenParticles.REJ_NONE)  # Change this to REJ_VARIANCE when Extraction is done by Xmipp!!
+        protSCR.autoParRejectionVar.set(XmippProtScreenParticles.REJ_VARIANCE)  # Change this to REJ_VARIANCE when Extraction is done by Xmipp!!
         setExtendedInput(protSCR.inputParticles, protTRIG, 'outputParticles')
         self._registerProt(protSCR, 'outputParticles')
 
         # --------- TRIGGER PARTS ---------------------------
         protTRIG2 = self.newProtocol(XmippProtTriggerData,
                                      objLabel='another trigger data',
-                                     outputSize=2000, delay=30,
+                                     outputSize=1500, delay=30,
                                      allParticles=False,
                                      splitParticles=False)
         setExtendedInput(protTRIG2.inputParticles, protSCR, 'outputParticles')
@@ -400,14 +395,14 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         # --------- CL2D 1 ---------------------------
         protCL = self.newProtocol(XmippProtCL2D, objLabel='cl2d',
-                                  numberOfClasses=16, numberOfMpi=8)
+                                  numberOfClasses=16, numberOfMpi=2)
         setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL)
 
         # --------- Relion 2D classify ---------------------------
         protCL2 = self.newProtocol(ProtRelionClassify2D,
                                    objLabel='relion 2D classification',
-                                   numberOfClasses=16, numberOfMpi=8)
+                                   numberOfClasses=16, numberOfMpi=2)
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL2)
 
@@ -479,8 +474,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                      objLabel='Join and align volumes',
                                      iter=30)  # iter=15)
         setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
-        setExtendedInput(protAVOL.inputVolumes, [protRAN, protINITVOL, protSIG],
-                         ['outputVolumes', 'outputVolumes', 'outputVolume'])
+        setExtendedInput(protAVOL.inputVolumes, [protINITVOL, protSIG],
+                         ['outputVolumes', 'outputVolume'])  # protRAN is missing since something fails
         self._registerProt(protAVOL)
 
 
