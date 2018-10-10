@@ -285,9 +285,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- CTF ESTIMATION 2 ---------------------------
         if not hasCUDA:
             protCTF2 = self.newProtocol(ProtCTFFind,
-                                        objLabel='GrigorieffLab - CTFfind',
-                                        streamingBatchSize=10,
-                                        streamingSleepOnWait=60)
+                                        objLabel='GrigorieffLab - CTFfind')
             setExtendedInput(protCTF2.inputMicrographs,
                              protPreMics, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
@@ -295,9 +293,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- CTF ESTIMATION 3 ---------------------------
         else:
             protCTF2 = self.newProtocol(ProtGctf,
-                                        objLabel='gCTF estimation',
-                                        streamingBatchSize=10,
-                                        streamingSleepOnWait=60)
+                                        objLabel='gCTF estimation')
             setExtendedInput(protCTF2.inputMicrographs,
                              protPreMics, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
