@@ -351,6 +351,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                       xmippParticlePicking=protPPman,
                                       micsToPick=1  # other
                                       )
+        protPPauto.addPrerequisites(protPPman.getObjId())
         setExtendedInput(protPPauto.inputMicrographs, protCTFs, 'outputMicrographs')
         self._registerProt(protPPauto, 'outputCoordinates', monitor=False)
 
