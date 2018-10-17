@@ -263,23 +263,11 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         else:
             alignedMicsLastProt = protMax
 
-        # --------- PREPROCESS MICS ---------------------------
-        downSampPreMics = sampRate/3 if sampRate<3 else 1  # desired samp. rate > 3A/px
-        protPreMics = self.newProtocol(XmippProtPreprocessMicrographs,
-                                   objLabel='Xmipp - preprocess Mics',
-                                   doRemoveBadPix=True,
-                                   doInvert=blackOnWhite,
-                                   doDownsample=sampRate<3,
-                                   downFactor=downSampPreMics)
-        setExtendedInput(protPreMics.inputMicrographs,
-                         alignedMicsLastProt, 'outputMicrographs')
-        self._registerProt(protPreMics, 'outputMicrographs', monitor=False)
-
         # --------- CTF ESTIMATION 1 ---------------------------
         protCTF1 = self.newProtocol(XmippProtCTFMicrographs,
                                     objLabel='Xmipp - ctf estimation')
-        setExtendedInput(protCTF1.inputMicrographs,                 # ------- ASK to COSS if use preProcess or not
-                         protPreMics, 'outputMicrographs')          #          if not, see the pickers!!
+        setExtendedInput(protCTF1.inputMicrographs,
+                         alignedMicsLastProt, 'outputMicrographs')
         self._registerProt(protCTF1, 'outputCTF', wait=False)
 
         # --------- CTF ESTIMATION 2 ---------------------------
@@ -287,7 +275,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             protCTF2 = self.newProtocol(ProtCTFFind,
                                         objLabel='GrigorieffLab - CTFfind')
             setExtendedInput(protCTF2.inputMicrographs,
-                             protPreMics, 'outputMicrographs')
+                             alignedMicsLastProt, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
 
         # --------- CTF ESTIMATION 3 ---------------------------
@@ -295,7 +283,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             protCTF2 = self.newProtocol(ProtGctf,
                                         objLabel='gCTF estimation')
             setExtendedInput(protCTF2.inputMicrographs,
-                             protPreMics, 'outputMicrographs')
+                             alignedMicsLastProt, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
 
         if not schedule:
@@ -315,20 +303,32 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protCTFs.inputCTF2, protCTF2, 'outputCTF')
         self._registerProt(protCTFs, 'outputMicrographs')
 
+        # --------- PREPROCESS MICS ---------------------------
+        downSampPreMics = sampRate/3 if sampRate<3 else 1  # desired samp. rate > 3A/px
+        protPreMics = self.newProtocol(XmippProtPreprocessMicrographs,
+                                   objLabel='Xmipp - preprocess Mics',
+                                   doRemoveBadPix=True,
+                                   doInvert=blackOnWhite,
+                                   doDownsample=sampRate<3,
+                                   downFactor=downSampPreMics)
+        setExtendedInput(protPreMics.inputMicrographs,
+                         protCTFs, 'outputMicrographs')
+        self._registerProt(protPreMics, 'outputMicrographs', monitor=False)
+
         # --------- PARTICLE PICKING 1 ---------------------------
         bxSize = int(partSize/sampRate/downSampPreMics)
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
                                   objLabel='Eman - Sparx auto-picking',
                                   boxSize=bxSize)
-        setExtendedInput(protPP1.inputMicrographs, protCTFs, 'outputMicrographs')
+        setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
         self._registerProt(protPP1, 'outputCoordinates', wait=False, monitor=False)
 
         # --------- PARTICLE PICKING 2 ---------------------------
-        protPP2 = self.newProtocol(DogPickerProtPicking,  # ------------------- Put here CrYolo!!
-                                  objLabel='Sphire - CrYolo auto-picking',
-                                  diameter=partSize)
-        setExtendedInput(protPP2.inputMicrographs, protCTFs, 'outputMicrographs')
-        self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
+        # protPP2 = self.newProtocol(DogPickerProtPicking,  # ------------------- Put here CrYolo!!
+        #                           objLabel='Sphire - CrYolo auto-picking',
+        #                           diameter=partSize)
+        # setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
+        # self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
 
         # --------- TRIGGER MANUAL-PICKER ---------------------------
         protTRIG0 = self.newProtocol(XmippProtTriggerData,
@@ -336,12 +336,13 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                      outputSize=nMicsToPick,
                                      delay=30,
                                      allParticles=False)
-        setExtendedInput(protTRIG0.inputImages, protCTFs, 'outputMicrographs')
+        setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
         self._registerProt(protTRIG0, 'outputMicrographs', monitor=False)
 
         # --------- XMIPP MANUAL-PICKER -------------------------
         protPPman = self.newProtocol(XmippProtParticlePicking,
-                                     objLabel='Xmipp - manual picking')
+                                     objLabel='Xmipp - manual picking',
+                                     doInteractive=False)
         setExtendedInput(protPPman.inputMicrographs, protTRIG0, 'outputMicrographs')
         self._registerProt(protPPman, 'outputCoordinates', monitor=False)
 
@@ -352,21 +353,21 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                       micsToPick=1  # other
                                       )
         protPPauto.addPrerequisites(protPPman.getObjId())
-        setExtendedInput(protPPauto.inputMicrographs, protCTFs, 'outputMicrographs')
+        setExtendedInput(protPPauto.inputMicrographs, protPreMics, 'outputMicrographs')
         self._registerProt(protPPauto, 'outputCoordinates', monitor=False)
 
         if not schedule:
             self._waitOutput(protPP1, 'outputCoordinates')
-            self._waitOutput(protPP2, 'outputCoordinates')
+            # self._waitOutput(protPP2, 'outputCoordinates')
         # --------- CONSENSUS PICKING AND -----------------------
         protCPand = self.newProtocol(XmippProtConsensusPicking,
                                   objLabel='Xmipp - consensus picking AND',
                                   consensus=-1,
                                   consensusRadius=0.1*bxSize)
         setExtendedInput(protCPand.inputCoordinates,
-                         [protPP1, protPP2, protPPauto],
-                         ['outputCoordinates', 'outputCoordinates',
-                          'outputCoordinates'])
+                         [protPP1, protPPauto], #protPP2,
+                         ['outputCoordinates', 'outputCoordinates'])#,
+                          #'outputCoordinates'])
         self._registerProt(protCPand, 'consensusCoordinates')
 
         # --------- CONSENSUS PICKING OR -----------------------
@@ -375,9 +376,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                   consensus=1,
                                   consensusRadius=0.1 * bxSize)
         setExtendedInput(protCPor.inputCoordinates,
-                         [protPP1, protPP2, protPPauto],
-                         ['outputCoordinates', 'outputCoordinates',
-                          'outputCoordinates'])
+                         [protPP1, protPPauto], #protPP2,
+                         ['outputCoordinates', 'outputCoordinates'])#,
+                          #'outputCoordinates'])
         self._registerProt(protCPor, 'consensusCoordinates')
 
         # --------- EXTRACT PARTICLES AND ----------------------
