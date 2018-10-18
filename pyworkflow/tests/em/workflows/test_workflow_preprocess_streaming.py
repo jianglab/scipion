@@ -320,16 +320,16 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- PARTICLE PICKING 1 ---------------------------
         bxSize = int(partSize/sampRate/downSampPreMics)
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
-                                  objLabel='Eman - Sparx auto-picking',
-                                  boxSize=bxSize)
+                                   objLabel='Eman - Sparx auto-picking',
+                                   boxSize=bxSize)
         setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
         self._registerProt(protPP1, 'outputCoordinates', wait=False, monitor=False)
 
         # --------- PARTICLE PICKING 2 ---------------------------
         if doCryolo:
-            protPP2 = self.newProtocol(DogPickerProtPicking,  # ------------------- Put CrYolo here!!
-                                      objLabel='Sphire - CrYolo auto-picking',
-                                      diameter=partSize)
+            protPP2 = self.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
+                                       objLabel='Sphire - CrYolo auto-picking',
+                                       boxSize=bxSize)
             setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
             self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
 
@@ -375,7 +375,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         if len(pickers) > 1:
             protCPand = self.newProtocol(XmippProtConsensusPicking,
-                                      objLabel='Xmipp - consensus picking AND',
+                                      objLabel='Xmipp - consensus picking (AND)',
                                       consensus=-1,
                                       consensusRadius=0.1*bxSize)
             setExtendedInput(protCPand.inputCoordinates, pickers, pickersOuts)
@@ -383,7 +383,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
             # --------- CONSENSUS PICKING OR -----------------------
             protCPor = self.newProtocol(XmippProtConsensusPicking,
-                                      objLabel='Xmipp - consensus picking OR',
+                                      objLabel='Xmipp - consensus picking (OR)',
                                       consensus=1,
                                       consensusRadius=0.1 * bxSize)
 
@@ -394,7 +394,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
             # --------- EXTRACT PARTICLES AND ----------------------
             protExtract = self.newProtocol(XmippProtExtractParticles,
-                                           objLabel='Xmipp - extract particles AND',
+                                           objLabel='Xmipp - extract particles (AND)',
                                            boxSize=bxSize,
                                            downsampleType=0,  # Same as picking
                                            doRemoveDust=True,
@@ -416,7 +416,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # ---------------------------------- OR/SINGLE PICKING BRANCH ----------
 
         # --------- EXTRACT PARTICLES OR ----------------------
-        ORstr = 'OR' if len(pickers)>1 else ''
+        ORstr = ' (OR)' if len(pickers)>1 else ''
         protExtraOR = self.newProtocol(XmippProtExtractParticles,
                                        objLabel='Xmipp - extract particles%s'%ORstr,
                                        boxSize=bxSize,
@@ -434,7 +434,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         # --------- ELIM EMPTY PARTS OR ---------------------------
         protEEPor = self.newProtocol(XmippProtEliminateEmptyParticles,
-                                     objLabel='Xmipp - Elim. empty part.',
+                                     objLabel='Xmipp - Elim. empty part.%s'%ORstr,
                                      inputType=0,
                                      threshold=1.1)
         setExtendedInput(protEEPor.inputParticles, protExtraOR, 'outputParticles')
@@ -442,7 +442,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         # --------- TRIGGER PARTS OR ---------------------------
         protTRIGor = self.newProtocol(XmippProtTriggerData,
-                                      objLabel='Xmipp - trigger data to stats',
+                                      objLabel='Xmipp - trigger data to stats%s'%ORstr,
                                       outputSize=1000, delay=30,
                                       allParticles=True,
                                       splitParticles=False)
@@ -451,7 +451,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         # --------- SCREEN PARTS OR ---------------------------
         protSCRor = self.newProtocol(XmippProtScreenParticles,
-                                     objLabel='Xmipp - Screen particles')
+                                     objLabel='Xmipp - Screen particles%s'%ORstr)
         protSCRor.autoParRejection.set(XmippProtScreenParticles.REJ_MAXZSCORE)
         protSCRor.autoParRejectionSSNR.set(XmippProtScreenParticles.REJ_PERCENTAGE_SSNR)
         protSCRor.autoParRejectionVar.set(XmippProtScreenParticles.REJ_VARIANCE)
@@ -489,7 +489,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         else:
             # --------- ELIM EMPTY PARTS AND ---------------------------
             protEEP = self.newProtocol(XmippProtEliminateEmptyParticles,
-                                       objLabel='Xmipp - Elim. empty part.',
+                                       objLabel='Xmipp - Elim. empty part. (AND)',
                                        inputType=0,
                                        threshold=1.1)
             setExtendedInput(protEEP.inputParticles, protExtract, 'outputParticles')
@@ -497,7 +497,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
             # --------- TRIGGER PARTS AND  ---------------------------
             protTRIG = self.newProtocol(XmippProtTriggerData,
-                                        objLabel='Xmipp - trigger data to stats',
+                                        objLabel='Xmipp - trigger data to stats (AND)',
                                         outputSize=1000, delay=30,
                                         allParticles=True,
                                         splitParticles=False)
@@ -506,7 +506,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
             # --------- SCREEN PARTS AND  ---------------------------
             protSCR = self.newProtocol(XmippProtScreenParticles,
-                                       objLabel='Xmipp - screen particles')
+                                       objLabel='Xmipp - screen particles (AND)')
             protSCR.autoParRejection.set(XmippProtScreenParticles.REJ_MAXZSCORE)
             protSCR.autoParRejectionSSNR.set(XmippProtScreenParticles.REJ_PERCENTAGE_SSNR)
             protSCR.autoParRejectionVar.set(XmippProtScreenParticles.REJ_VARIANCE)
