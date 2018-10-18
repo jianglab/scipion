@@ -109,7 +109,7 @@ ampContr = 0.1
 sphAberr = 2.
 volKv = 300
 sampRate = 3.54
-TIMEOUT = 5*60
+TIMEOUT = 0.5*60
 blackOnWhite = True
 # ----------------------------------------------------- #
 
@@ -155,7 +155,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             self.proj.saveProtocol(prot)
         else:
             self.proj.launchProtocol(prot, wait=False)
-            if wait is not None:
+            if wait:
                 self._waitOutput(prot, output)
         if monitor and output is not None:
             self.summaryList.append(prot)
@@ -313,9 +313,12 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
 
         # *************   PICKING   ********************************************
+        # Resizing to a sampling rate larger than 3A/px
+        downSampPreMics = sampRate / 3 if sampRate < 3 else 1
+        # Fixing an even boxsize big enough: int(x/2+1)*2 = ceil(x/2)*2 = even!
+        bxSize = int(partSize / sampRate / downSampPreMics / 2 + 1) * 2
 
         # --------- PREPROCESS MICS ---------------------------
-        downSampPreMics = sampRate/3 if sampRate<3 else 1  # desired samp. rate > 3A/px
         protPreMics = self.newProtocol(XmippProtPreprocessMicrographs,
                                    objLabel='Xmipp - preprocess Mics',
                                    doRemoveBadPix=True,
@@ -327,7 +330,6 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protPreMics, 'outputMicrographs', monitor=False)
 
         # --------- PARTICLE PICKING 1 ---------------------------
-        bxSize = round(partSize/sampRate/downSampPreMics/2)*2  # int(x/2)*2 to be even
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
                                    objLabel='Eman - Sparx auto-picking',
                                    boxSize=bxSize)
@@ -480,14 +482,14 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- EXTRACT FULL SIZE PART ------------------
         protExtraFull = self.newProtocol(XmippProtExtractParticles,
                                         objLabel='Xmipp - extract part. FULL SIZE',
-                                        boxSize= int(bxSize * downSampPreMics),
+                                        boxSize= int(partSize / sampRate)+1,
                                         downsampleType=1,  # other mics
                                         doRemoveDust=True,
                                         doNormalize=True,
                                         doInvert=blackOnWhite,  # maybe invert here bc the preprocess is skip
                                         doFlip=True)
         setExtendedInput(protExtraFull.inputCoordinates,
-                         protExtraC, 'consensusCoordinates')
+                         protExtraC, 'outputCoordinates')
         setExtendedInput(protExtraFull.inputMicrographs,
                          alignedMicsLastProt, 'outputMicrographs')
         setExtendedInput(protExtraFull.ctfRelations, protCTFs, 'outputCTF')
@@ -495,7 +497,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         # ----------------------------- END OF OR/SINGLE PICKING BRANCH --------
 
-
+        # ----------------------------- AND PICKING BRANCH ---------------------
         if len(pickers) < 2:  # if so, Elim. Empty and Screen are the same of above
             protSCR = protSCRor
         else:
@@ -559,7 +561,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protAVER1 = self.newProtocol(ProtUserSubSet,
                                      objLabel='Classes -> Averages I',
                                      outputClassName="SetOfAverages",
-                                     sqliteFile=protCL._getPath("classes2D.sqlite,")
+                                     sqliteFile=os.path.join(protCL._getPath(),
+                                                             "classes2D.sqlite,")
                                      )
         setExtendedInput(protAVER1.inputObject, protCL, 'outputClasses')
         self._registerProt(protAVER1, 'outputRepresentatives', monitor=False)
@@ -570,7 +573,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protAVER2 = self.newProtocol(ProtUserSubSet,
                                      objLabel='Classes -> Averages II',
                                      outputClassName="SetOfAverages",
-                                     sqliteFile=protCL2._getPath("classes2D.sqlite,")
+                                     sqliteFile=os.path.join(protCL2._getPath(),
+                                                             "classes2D.sqlite,"
                                      )
         setExtendedInput(protAVER2.inputObject, protCL2, 'outputClasses')
         self._registerProt(protAVER2, 'outputRepresentatives', monitor=False)
