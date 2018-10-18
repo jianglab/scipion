@@ -111,6 +111,7 @@ volKv = 300
 sampRate = 3.54
 TIMEOUT = 0.5*60
 blackOnWhite = True
+MPI2D = 4
 # ----------------------------------------------------- #
 
 
@@ -543,7 +544,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                   objLabel='Xmipp - Cl2d',
                                   doCore=False,
                                   numberOfClasses=16,
-                                  numberOfMpi=8)
+                                  numberOfMpi=MPI2D)
         setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL, 'outputClasses', wait=False)
 
@@ -551,7 +552,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protCL2 = self.newProtocol(ProtRelionClassify2D,
                                    objLabel='Relion - 2D classifying',
                                    numberOfClasses=16,
-                                   numberOfMpi=8)
+                                   numberOfMpi=MPI2D)
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL2, 'outputClasses', wait=False)
 
