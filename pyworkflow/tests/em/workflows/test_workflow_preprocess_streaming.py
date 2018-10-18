@@ -318,7 +318,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protPreMics, 'outputMicrographs', monitor=False)
 
         # --------- PARTICLE PICKING 1 ---------------------------
-        bxSize = int(partSize/sampRate/downSampPreMics)
+        bxSize = int(partSize/sampRate/downSampPreMics/2)*2  # int(x/2)*2 to be even
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
                                    objLabel='Eman - Sparx auto-picking',
                                    boxSize=bxSize)
@@ -334,7 +334,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
 
         if doManualPick:
-            # --------- TRIGGER MANUAL-PICKER ---------------------------
+            # -------- TRIGGER MANUAL-PICKER ---------------------------
             protTRIG0 = self.newProtocol(XmippProtTriggerData,
                                          objLabel='Xmipp - trigger some mics',
                                          outputSize=nMicsToPick,
@@ -343,7 +343,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
             self._registerProt(protTRIG0, 'outputMicrographs', monitor=False)
 
-            # --------- XMIPP MANUAL-PICKER -------------------------
+            # -------- XMIPP MANUAL-PICKER -------------------------
             protPPman = self.newProtocol(XmippProtParticlePicking,
                                          objLabel='Xmipp - manual picking',
                                          doInteractive=False)
