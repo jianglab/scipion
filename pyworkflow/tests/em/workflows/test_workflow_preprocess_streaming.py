@@ -339,7 +339,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                          objLabel='Xmipp - trigger some mics',
                                          outputSize=nMicsToPick,
                                          delay=30,
-                                         allParticles=False)
+                                         allImages=False)
             setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
             self._registerProt(protTRIG0, 'outputMicrographs', monitor=False)
 
@@ -444,8 +444,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protTRIGor = self.newProtocol(XmippProtTriggerData,
                                       objLabel='Xmipp - trigger data to stats%s'%ORstr,
                                       outputSize=1000, delay=30,
-                                      allParticles=True,
-                                      splitParticles=False)
+                                      allImages=True,
+                                      splitImages=False)
         setExtendedInput(protTRIGor.inputImages, protEEPor, 'outputParticles')
         self._registerProt(protTRIGor, 'outputParticles', monitor=False)
 
@@ -499,8 +499,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             protTRIG = self.newProtocol(XmippProtTriggerData,
                                         objLabel='Xmipp - trigger data to stats (AND)',
                                         outputSize=1000, delay=30,
-                                        allParticles=True,
-                                        splitParticles=False)
+                                        allImages=True,
+                                        splitImages=False)
             setExtendedInput(protTRIG.inputImages, protEEP, 'outputParticles')
             self._registerProt(protTRIG, 'outputParticles', monitor=False)
 
@@ -518,7 +518,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protTRIG2 = self.newProtocol(XmippProtTriggerData,
                                      objLabel='Xmipp - trigger data to classify',
                                      outputSize=5000, delay=30,
-                                     allParticles=False)
+                                     allImages=False)
         setExtendedInput(protTRIG2.inputImages, protSCR, 'outputParticles')
         self._registerProt(protTRIG2, 'outputParticles', monitor=False)
 
