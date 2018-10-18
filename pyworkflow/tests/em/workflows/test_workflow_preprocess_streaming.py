@@ -575,7 +575,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                      objLabel='Classes -> Averages II',
                                      outputClassName="SetOfAverages",
                                      sqliteFile=os.path.join(protCL2._getPath(),
-                                                             "classes2D.sqlite,"
+                                                             "classes2D.sqlite,")
                                      )
         setExtendedInput(protAVER2.inputObject, protCL2, 'outputClasses')
         self._registerProt(protAVER2, 'outputRepresentatives', monitor=False)
