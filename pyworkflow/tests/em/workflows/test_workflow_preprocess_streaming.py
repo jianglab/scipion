@@ -96,7 +96,9 @@ frame1 = 1
 frameN = 0
 doOF = False
 partSize = int(80*3.54)  # in A
-nMicsToPick = 3
+doCryolo = False
+doManualPick = False
+nMicsToPick = 1
 symmGr = 'd2'
 # ----------------------------------------------------- #
 
@@ -324,82 +326,99 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protPP1, 'outputCoordinates', wait=False, monitor=False)
 
         # --------- PARTICLE PICKING 2 ---------------------------
-        # protPP2 = self.newProtocol(DogPickerProtPicking,  # ------------------- Put here CrYolo!!
-        #                           objLabel='Sphire - CrYolo auto-picking',
-        #                           diameter=partSize)
-        # setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
-        # self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
+        if doCryolo:
+            protPP2 = self.newProtocol(DogPickerProtPicking,  # ------------------- Put CrYolo here!!
+                                      objLabel='Sphire - CrYolo auto-picking',
+                                      diameter=partSize)
+            setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
+            self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
 
-        # --------- TRIGGER MANUAL-PICKER ---------------------------
-        protTRIG0 = self.newProtocol(XmippProtTriggerData,
-                                     objLabel='Xmipp - trigger some mics',
-                                     outputSize=nMicsToPick,
-                                     delay=30,
-                                     allParticles=False)
-        setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
-        self._registerProt(protTRIG0, 'outputMicrographs', monitor=False)
+        if doManualPick:
+            # --------- TRIGGER MANUAL-PICKER ---------------------------
+            protTRIG0 = self.newProtocol(XmippProtTriggerData,
+                                         objLabel='Xmipp - trigger some mics',
+                                         outputSize=nMicsToPick,
+                                         delay=30,
+                                         allParticles=False)
+            setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
+            self._registerProt(protTRIG0, 'outputMicrographs', monitor=False)
 
-        # --------- XMIPP MANUAL-PICKER -------------------------
-        protPPman = self.newProtocol(XmippProtParticlePicking,
-                                     objLabel='Xmipp - manual picking',
-                                     doInteractive=False)
-        setExtendedInput(protPPman.inputMicrographs, protTRIG0, 'outputMicrographs')
-        self._registerProt(protPPman, 'outputCoordinates', monitor=False)
+            # --------- XMIPP MANUAL-PICKER -------------------------
+            protPPman = self.newProtocol(XmippProtParticlePicking,
+                                         objLabel='Xmipp - manual picking',
+                                         doInteractive=False)
+            setExtendedInput(protPPman.inputMicrographs, protTRIG0, 'outputMicrographs')
+            self._registerProt(protPPman, 'outputCoordinates', monitor=False)
 
-        # -------- XMIPP AUTO-PICKING ---------------------------
-        protPPauto = self.newProtocol(XmippParticlePickingAutomatic,
-                                      objLabel='Xmipp - auto picking',
-                                      xmippParticlePicking=protPPman,
-                                      micsToPick=1  # other
-                                      )
-        protPPauto.addPrerequisites(protPPman.getObjId())
-        setExtendedInput(protPPauto.inputMicrographs, protPreMics, 'outputMicrographs')
-        self._registerProt(protPPauto, 'outputCoordinates', monitor=False)
+            # -------- XMIPP AUTO-PICKING ---------------------------
+            protPPauto = self.newProtocol(XmippParticlePickingAutomatic,
+                                          objLabel='Xmipp - auto picking',
+                                          xmippParticlePicking=protPPman,
+                                          micsToPick=1  # other
+                                          )
+            protPPauto.addPrerequisites(protPPman.getObjId())
+            setExtendedInput(protPPauto.inputMicrographs, protPreMics, 'outputMicrographs')
+            self._registerProt(protPPauto, 'outputCoordinates', monitor=False)
 
         if not schedule:
             self._waitOutput(protPP1, 'outputCoordinates')
-            # self._waitOutput(protPP2, 'outputCoordinates')
+            # self._waitOutput(protPPauto, 'outputCoordinates')
         # --------- CONSENSUS PICKING AND -----------------------
-        protCPand = self.newProtocol(XmippProtConsensusPicking,
-                                  objLabel='Xmipp - consensus picking AND',
-                                  consensus=-1,
-                                  consensusRadius=0.1*bxSize)
-        setExtendedInput(protCPand.inputCoordinates,
-                         [protPP1, protPPauto], #protPP2,
-                         ['outputCoordinates', 'outputCoordinates'])#,
-                          #'outputCoordinates'])
-        self._registerProt(protCPand, 'consensusCoordinates')
+        pickers = [protPP1]
+        pickersOuts = ['outputCoordinates']
+        if doCryolo:
+            pickers.append(protPP2)
+            pickersOuts.append('outputCoordinates')
+        if doManualPick:
+            pickers.append(protPPauto)
+            pickersOuts.append('outputCoordinates')
 
-        # --------- CONSENSUS PICKING OR -----------------------
-        protCPor = self.newProtocol(XmippProtConsensusPicking,
-                                  objLabel='Xmipp - consensus picking OR',
-                                  consensus=1,
-                                  consensusRadius=0.1 * bxSize)
-        setExtendedInput(protCPor.inputCoordinates,
-                         [protPP1, protPPauto], #protPP2,
-                         ['outputCoordinates', 'outputCoordinates'])#,
-                          #'outputCoordinates'])
-        self._registerProt(protCPor, 'consensusCoordinates')
+        if len(pickers) > 1:
+            protCPand = self.newProtocol(XmippProtConsensusPicking,
+                                      objLabel='Xmipp - consensus picking AND',
+                                      consensus=-1,
+                                      consensusRadius=0.1*bxSize)
+            setExtendedInput(protCPand.inputCoordinates, pickers, pickersOuts)
+            self._registerProt(protCPand, 'consensusCoordinates')
 
-        # --------- EXTRACT PARTICLES AND ----------------------
-        protExtract = self.newProtocol(XmippProtExtractParticles,
-                                       objLabel='Xmipp - extract particles AND',
-                                       boxSize=bxSize,
-                                       downsampleType=0,  # Same as picking
-                                       doRemoveDust=True,
-                                       doNormalize=True,
-                                       doInvert=False,
-                                       doFlip=True)
-        setExtendedInput(protExtract.inputCoordinates,
-                         protCPand, 'consensusCoordinates')
-        # setExtendedInput(protExtract.inputMicrographs,
-        #                  alignedMicsLastProt, 'outputMicrographs')
-        setExtendedInput(protExtract.ctfRelations, protCTFs, 'outputCTF')
-        self._registerProt(protExtract, 'outputParticles')
+            # --------- CONSENSUS PICKING OR -----------------------
+            protCPor = self.newProtocol(XmippProtConsensusPicking,
+                                      objLabel='Xmipp - consensus picking OR',
+                                      consensus=1,
+                                      consensusRadius=0.1 * bxSize)
+
+            setExtendedInput(protCPor.inputCoordinates, pickers, pickersOuts)
+            self._registerProt(protCPor, 'consensusCoordinates')
+            finalPicker = protCPor
+            outputCoordsStr = 'consensusCoordinates'
+
+            # --------- EXTRACT PARTICLES AND ----------------------
+            protExtract = self.newProtocol(XmippProtExtractParticles,
+                                           objLabel='Xmipp - extract particles AND',
+                                           boxSize=bxSize,
+                                           downsampleType=0,  # Same as picking
+                                           doRemoveDust=True,
+                                           doNormalize=True,
+                                           doInvert=False,
+                                           doFlip=True)
+            setExtendedInput(protExtract.inputCoordinates,
+                             protCPand, 'consensusCoordinates')
+            # setExtendedInput(protExtract.inputMicrographs,
+            #                  protPreMics, 'outputMicrographs')
+            setExtendedInput(protExtract.ctfRelations, protCTFs, 'outputCTF')
+            self._registerProt(protExtract, 'outputParticles')
+
+        else:
+            finalPicker = pickers[0]
+            outputCoordsStr = pickersOuts[0]
+
+
+        # ---------------------------------- OR/SINGLE PICKING BRANCH ----------
 
         # --------- EXTRACT PARTICLES OR ----------------------
+        ORstr = 'OR' if len(pickers)>1 else ''
         protExtraOR = self.newProtocol(XmippProtExtractParticles,
-                                       objLabel='Xmipp - extract particles OR',
+                                       objLabel='Xmipp - extract particles%s'%ORstr,
                                        boxSize=bxSize,
                                        downsampleType=0,  # Same as picking
                                        doRemoveDust=True,
@@ -407,9 +426,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                        doInvert=False,
                                        doFlip=True)
         setExtendedInput(protExtraOR.inputCoordinates,
-                         protCPor, 'consensusCoordinates')
+                         finalPicker, outputCoordsStr)
         # setExtendedInput(protExtraOR.inputMicrographs,
-        #                  alignedMicsLastProt, 'outputMicrographs')
+        #                  protPreMics, 'outputMicrographs')
         setExtendedInput(protExtraOR.ctfRelations, protCTFs, 'outputCTF')
         self._registerProt(protExtraOR, 'outputParticles')
 
@@ -443,7 +462,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protExtraC = self.newProtocol(ProtExtractCoords,
                                       objLabel='Scipion - extrac coord.')
         setExtendedInput(protExtraC.inputParticles, protSCRor, 'outputParticles')
-        setExtendedInput(protExtraC.inputMicrographs, protCTFs, 'outputMicrographs')
+        setExtendedInput(protExtraC.inputMicrographs, protPreMics, 'outputMicrographs')
         self._registerProt(protExtraC, 'outputCoordinates', monitor=False)
 
         # --------- EXTRACT FULL SIZE PART ------------------
@@ -462,31 +481,38 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protExtraFull.ctfRelations, protCTFs, 'outputCTF')
         self._registerProt(protExtraFull, 'outputParticles')
 
-        # --------- ELIM EMPTY PARTS AND ---------------------------
-        protEEP = self.newProtocol(XmippProtEliminateEmptyParticles,
-                                   objLabel='Xmipp - Elim. empty part.',
-                                   inputType=0,
-                                   threshold=1.1)
-        setExtendedInput(protEEP.inputParticles, protExtract, 'outputParticles')
-        self._registerProt(protEEP, 'outputParticles')
+        # ----------------------------- END OF OR/SINGLE PICKING BRANCH --------
 
-        # --------- TRIGGER PARTS AND  ---------------------------
-        protTRIG = self.newProtocol(XmippProtTriggerData,
-                                    objLabel='Xmipp - trigger data to stats',
-                                    outputSize=1000, delay=30,
-                                    allParticles=True,
-                                    splitParticles=False)
-        setExtendedInput(protTRIG.inputImages, protEEP, 'outputParticles')
-        self._registerProt(protTRIG, 'outputParticles', monitor=False)
 
-        # --------- SCREEN PARTS AND  ---------------------------
-        protSCR = self.newProtocol(XmippProtScreenParticles,
-                                   objLabel='Xmipp - screen particles')
-        protSCR.autoParRejection.set(XmippProtScreenParticles.REJ_MAXZSCORE)
-        protSCR.autoParRejectionSSNR.set(XmippProtScreenParticles.REJ_PERCENTAGE_SSNR)
-        protSCR.autoParRejectionVar.set(XmippProtScreenParticles.REJ_VARIANCE)
-        setExtendedInput(protSCR.inputParticles, protTRIG, 'outputParticles')
-        self._registerProt(protSCR, 'outputParticles')
+        if len(pickers) < 2:  # if so, Elim. Empty and Screen are the same of above
+            protSCR = protSCRor
+        else:
+            # --------- ELIM EMPTY PARTS AND ---------------------------
+            protEEP = self.newProtocol(XmippProtEliminateEmptyParticles,
+                                       objLabel='Xmipp - Elim. empty part.',
+                                       inputType=0,
+                                       threshold=1.1)
+            setExtendedInput(protEEP.inputParticles, protExtract, 'outputParticles')
+            self._registerProt(protEEP, 'outputParticles')
+
+            # --------- TRIGGER PARTS AND  ---------------------------
+            protTRIG = self.newProtocol(XmippProtTriggerData,
+                                        objLabel='Xmipp - trigger data to stats',
+                                        outputSize=1000, delay=30,
+                                        allParticles=True,
+                                        splitParticles=False)
+            setExtendedInput(protTRIG.inputImages, protEEP, 'outputParticles')
+            self._registerProt(protTRIG, 'outputParticles', monitor=False)
+
+            # --------- SCREEN PARTS AND  ---------------------------
+            protSCR = self.newProtocol(XmippProtScreenParticles,
+                                       objLabel='Xmipp - screen particles')
+            protSCR.autoParRejection.set(XmippProtScreenParticles.REJ_MAXZSCORE)
+            protSCR.autoParRejectionSSNR.set(XmippProtScreenParticles.REJ_PERCENTAGE_SSNR)
+            protSCR.autoParRejectionVar.set(XmippProtScreenParticles.REJ_VARIANCE)
+            setExtendedInput(protSCR.inputParticles, protTRIG, 'outputParticles')
+            self._registerProt(protSCR, 'outputParticles')
+
 
         # --------- TRIGGER PARTS ---------------------------
         protTRIG2 = self.newProtocol(XmippProtTriggerData,
