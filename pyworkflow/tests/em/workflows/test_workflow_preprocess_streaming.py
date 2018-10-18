@@ -190,6 +190,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self.summaryList = []
         self.summaryExt = []
 
+
+        # ***********   MOVIES   ***********************************************
+
         # ----------- IMPORT MOVIES -------------------
         protImport = self.newProtocol(ProtImportMovies,
                                       objLabel='import movies',
@@ -265,6 +268,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         else:
             alignedMicsLastProt = protMax
 
+
+        # *********   CTF ESTIMATION   *****************************************
+
         # --------- CTF ESTIMATION 1 ---------------------------
         protCTF1 = self.newProtocol(XmippProtCTFMicrographs,
                                     objLabel='Xmipp - ctf estimation')
@@ -305,6 +311,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protCTFs.inputCTF2, protCTF2, 'outputCTF')
         self._registerProt(protCTFs, 'outputMicrographs')
 
+
+        # *************   PICKING   ********************************************
+
         # --------- PREPROCESS MICS ---------------------------
         downSampPreMics = sampRate/3 if sampRate<3 else 1  # desired samp. rate > 3A/px
         protPreMics = self.newProtocol(XmippProtPreprocessMicrographs,
@@ -318,7 +327,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protPreMics, 'outputMicrographs', monitor=False)
 
         # --------- PARTICLE PICKING 1 ---------------------------
-        bxSize = int(partSize/sampRate/downSampPreMics/2)*2  # int(x/2)*2 to be even
+        bxSize = round(partSize/sampRate/downSampPreMics/2)*2  # int(x/2)*2 to be even
         protPP1 = self.newProtocol(SparxGaussianProtPicking,
                                    objLabel='Eman - Sparx auto-picking',
                                    boxSize=bxSize)
@@ -432,6 +441,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protExtraOR.ctfRelations, protCTFs, 'outputCTF')
         self._registerProt(protExtraOR, 'outputParticles')
 
+
+        # ***********   PROCESS PARTICLES   ************************************
+
         # --------- ELIM EMPTY PARTS OR ---------------------------
         protEEPor = self.newProtocol(XmippProtEliminateEmptyParticles,
                                      objLabel='Xmipp - Elim. empty part.%s'%ORstr,
@@ -514,6 +526,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
             self._registerProt(protSCR, 'outputParticles')
 
 
+        # ************   CLASSIFY 2D   *****************************************
+
         # --------- TRIGGER PARTS ---------------------------
         protTRIG2 = self.newProtocol(XmippProtTriggerData,
                                      objLabel='Xmipp - trigger data to classify',
@@ -576,7 +590,10 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protCLSEL.inputAverages, protJOIN, 'outputSet')
         self._registerProt(protCLSEL, 'outputAverages')
 
-        # --------- INITIAL VOLUME ---------------------------
+
+        # ***************   INITIAL VOLUME   ***********************************
+
+        # --------- EMAN INIT VOLUME ---------------------------
         protINITVOL = self.newProtocol(EmanProtInitModel,
                                        objLabel='Eman - Initial vol',
                                        symmetryGroup=symmGr)
@@ -623,6 +640,9 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                        resizeSamplingRate=sampRate)
         setExtendedInput(protVOLfull.inputVolumes, protSWARM, 'outputVolume')
         self._registerProt(protVOLfull, 'outputVolumes', monitor=False)
+
+
+        # ************   FINAL PROTOCOLS   *************************************
 
         # --------- GL2D in streaming --------------------
         if hasCUDA:
