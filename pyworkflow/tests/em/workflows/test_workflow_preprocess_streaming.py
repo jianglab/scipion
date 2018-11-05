@@ -91,12 +91,17 @@ def setExtendedInput(protDotInput, lastProt, extended):
 
 
 # Form:   --------------------------------------------- #
-hasCUDA = False
+gpuMotion = 0
+gpuGctf = 1
+gpuCryolo = -1
+gpuRelion = 2
+gpuGl2d = -1
 frame1 = 1
 frameN = 0
+dose0 = 0
+doseF = 0
 doOF = False
 partSize = int(80*3.54)  # in A
-doCryolo = False
 doManualPick = False
 nMicsToPick = 1
 symmGr = 'd2'
@@ -193,7 +198,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
 
         # ***********   MOVIES   ***********************************************
-
+        doDose = False if doseF == 0 else True
         # ----------- IMPORT MOVIES -------------------
         protImport = self.newProtocol(ProtImportMovies,
                                       objLabel='import movies',
@@ -205,6 +210,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                       sphericalAberration=sphAberr,
                                       voltage=volKv,
                                       samplingRate=sampRate,
+                                      doseInitial=dose0,
+                                      dosePerFrame=doseF,
                                       dataStreaming=True,
                                       timeout=TIMEOUT)
         self._registerProt(protImport, 'outputMovies')
@@ -219,13 +226,16 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protMG, 'outputImages', wait=False)
 
         # ----------- MOTIONCOR ----------------------------
-        if hasCUDA:
+        if gpuMotion > -1:
             protMC = self.newProtocol(ProtMotionCorr,
-                                      objLabel='MotionCor2 - movie align.')
+                                      objLabel='MotionCor2 - movie align.',
+                                      gpuList=str(gpuMotion),
+                                      doApplyDoseFilter=doDose,
+                                      patchX=9, patchY=9)
             setExtendedInput(protMC.inputMovies, protImport, 'outputMovies')
             self._registerProt(protMC, 'outputMovies')
 
-        # ----------- MAX SHIFT -----------------------------
+            # ----------- MAX SHIFT -----------------------------
             protMax1 = self.newProtocol(XmippProtMovieMaxShift,
                                        objLabel='Xmipp - max shift')
             setExtendedInput(protMax1.inputMovies, protMC, 'outputMovies')
@@ -256,12 +266,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         if doOF:
             protOF = self.newProtocol(XmippProtOFAlignment,
                                       objLabel='Xmipp - OF align.',
-                                      doSaveMovie=False,
-                                      alignFrame0=3,            # ------------ ASK to COSS ----------
-                                      alignFrameN=10,
-                                      useAlignToSum=True,
-                                      useAlignment=False,
-                                      doApplyDoseFilter=False)  # -----------------------------------
+                                      doApplyDoseFilter=doDose,
+                                      applyDosePreAlign=False)  # -----------------------------------
             setExtendedInput(protOF.inputMovies, protMax, 'outputMovies')
             self._registerProt(protOF, 'outputMicrographs')
 
@@ -280,17 +286,17 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protCTF1, 'outputCTF', wait=False)
 
         # --------- CTF ESTIMATION 2 ---------------------------
-        if not hasCUDA:
-            protCTF2 = self.newProtocol(ProtCTFFind,
-                                        objLabel='GrigorieffLab - CTFfind')
+        if gpuGctf>-1:
+            protCTF2 = self.newProtocol(ProtGctf,
+                                        objLabel='gCTF estimation',
+                                        gpuList=str(gpuGctf))
             setExtendedInput(protCTF2.inputMicrographs,
                              alignedMicsLastProt, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
 
-        # --------- CTF ESTIMATION 3 ---------------------------
         else:
-            protCTF2 = self.newProtocol(ProtGctf,
-                                        objLabel='gCTF estimation')
+            protCTF2 = self.newProtocol(ProtCTFFind,
+                                        objLabel='GrigorieffLab - CTFfind')
             setExtendedInput(protCTF2.inputMicrographs,
                              alignedMicsLastProt, 'outputMicrographs')
             self._registerProt(protCTF2, 'outputCTF', wait=False, monitor=False)
@@ -298,6 +304,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         if not schedule:
             self._waitOutput(protCTF1, 'outputCTF')
             self._waitOutput(protCTF2, 'outputCTF')
+
         # --------- CTF CONSENSUS 1 ---------------------------
         protCTFs = self.newProtocol(XmippProtCTFConsensus,
                                     objLabel='Xmipp - CTF consensus',
@@ -338,9 +345,10 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         self._registerProt(protPP1, 'outputCoordinates', wait=False, monitor=False)
 
         # --------- PARTICLE PICKING 2 ---------------------------
-        if doCryolo:
+        if gpuCryolo>-1:
             protPP2 = self.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
                                        objLabel='Sphire - CrYolo auto-picking',
+                                       gpuList=str(gpuCryolo),
                                        boxSize=bxSize)
             setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
             self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
@@ -378,7 +386,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- CONSENSUS PICKING AND -----------------------
         pickers = [protPP1]
         pickersOuts = ['outputCoordinates']
-        if doCryolo:
+        if gpuCryolo > -1:
             pickers.append(protPP2)
             pickersOuts.append('outputCoordinates')
         if doManualPick:
@@ -417,7 +425,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                              protCPand, 'consensusCoordinates')
             # setExtendedInput(protExtract.inputMicrographs,
             #                  protPreMics, 'outputMicrographs')
-            setExtendedInput(protExtract.ctfRelations, protCTFs, 'outputCTF')
+            setExtendedInput(protExtract.ctfRelations, protCTF1, 'outputCTF')
             self._registerProt(protExtract, 'outputParticles')
 
         else:
@@ -441,7 +449,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                          finalPicker, outputCoordsStr)
         # setExtendedInput(protExtraOR.inputMicrographs,
         #                  protPreMics, 'outputMicrographs')
-        setExtendedInput(protExtraOR.ctfRelations, protCTFs, 'outputCTF')
+        setExtendedInput(protExtraOR.ctfRelations, protCTF1, 'outputCTF')
         self._registerProt(protExtraOR, 'outputParticles')
 
 
@@ -492,7 +500,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protExtraFull.inputCoordinates,
                          protExtraC, 'outputCoordinates')
         setExtendedInput(protExtraFull.inputMicrographs,
-                         alignedMicsLastProt, 'outputMicrographs')
+                         protCTFs, 'outputMicrographs')
         setExtendedInput(protExtraFull.ctfRelations, protCTFs, 'outputCTF')
         self._registerProt(protExtraFull, 'outputParticles')
 
@@ -539,7 +547,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protTRIG2.inputImages, protSCR, 'outputParticles')
         self._registerProt(protTRIG2, 'outputParticles', monitor=False)
 
-        # --------- CL2D 1 ---------------------------
+        # --------- XMIPP CL2D ---------------------------
         protCL = self.newProtocol(XmippProtCL2D,
                                   objLabel='Xmipp - Cl2d',
                                   doCore=False,
@@ -551,6 +559,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- Relion 2D classify ---------------------------
         protCL2 = self.newProtocol(ProtRelionClassify2D,
                                    objLabel='Relion - 2D classifying',
+                                   useGpu=gpuRelion>-1,
+                                   gpuList=str(gpuRelion),
                                    numberOfClasses=16,
                                    numberOfMpi=MPI2D)
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
@@ -650,9 +660,10 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # ************   FINAL PROTOCOLS   *************************************
 
         # --------- GL2D in streaming --------------------
-        if hasCUDA:
+        if gpuGl2d>-1:
             protGL2D = self.newProtocol(XmippProtStrGpuCrrSimple,
-                                        objLabel='Xmipp - GL2D static')
+                                        objLabel='Xmipp - GL2D static',
+                                        gpuList=str(gpuGl2d))
             setExtendedInput(protGL2D.inputRefs, protJOIN, 'outputSet')
             setExtendedInput(protGL2D.inputParticles, protSCRor, 'outputParticles')
             self._registerProt(protGL2D, 'outputClasses')
@@ -670,6 +681,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
 
         os.system('%s project %s &' % (pw.getScipionScript(), projName))
 
+        import time
+        time.sleep(10)
 
 
 # if __name__ == "__main__":
