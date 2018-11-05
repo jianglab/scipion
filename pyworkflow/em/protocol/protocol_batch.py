@@ -33,7 +33,7 @@ from pyworkflow.em.protocol import EMProtocol
 from pyworkflow.em.data import (SetOfImages, SetOfCTF, SetOfClasses,
                                 SetOfClasses3D, SetOfVolumes, EMObject, EMSet,
                                 SetOfNormalModes, SetOfParticles, SetOfPDBs, FSC,
-                                Class2D, Class3D, SetOfMicrographs, ALIGN_NONE)
+                                Class2D, Class3D, SetOfMicrographs, ALIGN_NONE, Image)
 from pyworkflow.em.data_tiltpairs import (TiltPair, MicrographsTiltPair,
                                           ParticlesTiltPair)
 from pyworkflow.em.data import Mask
@@ -245,6 +245,9 @@ class ProtUserSubSet(BatchProtocol):
         assigned to each class.
         """
         inputImages = inputClasses.getImages()
+        if not isinstance(inputImages, Image):
+            inputImages = inputClasses.getFirstItem()
+        print("inputClasses.getImages(): %s" % inputClasses.getImages())
         createFunc = getattr(self, '_create' + outputClassName)
         modifiedSet = inputClasses.getClass()(filename=self._dbName, prefix=self._dbPrefix)
         self.info("Creating REPRESENTATIVES of images from classes, sqlite file: %s" % self._dbName)
