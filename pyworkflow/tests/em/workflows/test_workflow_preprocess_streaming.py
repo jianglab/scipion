@@ -91,10 +91,10 @@ def setExtendedInput(protDotInput, lastProt, extended):
 
 
 # Form:   --------------------------------------------- #
-gpuMotion = 0
-gpuGctf = 1
+gpuMotion = -1
+gpuGctf = -1
 gpuCryolo = -1
-gpuRelion = 2
+gpuRelion = -1
 gpuGl2d = -1
 frame1 = 1
 frameN = 0
@@ -116,7 +116,7 @@ volKv = 300
 sampRate = 3.54
 TIMEOUT = 0.5*60
 blackOnWhite = True
-MPI2D = 4
+highCPUusage = 32
 # ----------------------------------------------------- #
 
 
@@ -552,7 +552,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                   objLabel='Xmipp - Cl2d',
                                   doCore=False,
                                   numberOfClasses=16,
-                                  numberOfMpi=MPI2D)
+                                  numberOfMpi=int(highCPUusage/2))
         setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL, 'outputClasses', wait=False)
 
@@ -562,7 +562,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                    useGpu=gpuRelion>-1,
                                    gpuList=str(gpuRelion),
                                    numberOfClasses=16,
-                                   numberOfMpi=MPI2D)
+                                   numberOfMpi=int(highCPUusage/2))
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL2, 'outputClasses', wait=False)
 
@@ -611,28 +611,32 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- EMAN INIT VOLUME ---------------------------
         protINITVOL = self.newProtocol(EmanProtInitModel,
                                        objLabel='Eman - Initial vol',
-                                       symmetryGroup=symmGr)
+                                       symmetryGroup=symmGr,
+                                       numberOfThreads=int(highCPUusage/4))
         setExtendedInput(protINITVOL.inputSet, protCLSEL, 'outputAverages')
         self._registerProt(protINITVOL)
 
         # --------- RECONSTRUCT SIGNIFICANT ---------------------------
         protSIG = self.newProtocol(XmippProtReconstructSignificant,
                                    objLabel='Xmipp - Recons. significant',
-                                   symmetryGroup=symmGr)
+                                   symmetryGroup=symmGr,
+                                   numberOfMpi=int(highCPUusage/2))
         setExtendedInput(protSIG.inputSet, protCLSEL, 'outputAverages')
         self._registerProt(protSIG)
 
         # --------- RECONSTRUCT RANSAC ---------------------------
         protRAN = self.newProtocol(XmippProtRansac,
                                    objLabel='Xmipp - Ransac significant',
-                                   symmetryGroup=symmGr)
+                                   symmetryGroup=symmGr,
+                                   numberOfThreads=int(highCPUusage/4))
         setExtendedInput(protRAN.inputSet, protCLSEL, 'outputAverages')
         self._registerProt(protRAN)
 
         #  FIXME: ADD WAIT IF NOT SCHEDULE
         # --------- CREATING AN ALIGNED SET OF VOLUMES -----------
         protAVOL = self.newProtocol(XmippProtAlignVolume,
-                                    objLabel='Xmipp - Join/Align volumes')
+                                    objLabel='Xmipp - Join/Align volumes',
+                                    numberOfThreads=highCPUusage)
         setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
         setExtendedInput(protAVOL.inputVolumes,
                          [protINITVOL, protRAN, protSIG],
@@ -642,7 +646,8 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- SWARM CONSENSUS INITIAL VOLUME ---------------
         protSWARM = self.newProtocol(XmippProtReconstructSwarm,
                                      objLabel='Xmipp - Swarm init. vol.',
-                                     symmetryGroup=symmGr)
+                                     symmetryGroup=symmGr,
+                                     numberOfMpi=highCPUusage)
         setExtendedInput(protSWARM.inputParticles, protTRIG2, 'outputParticles')
         setExtendedInput(protSWARM.inputVolumes, protAVOL, 'outputVolumes')
         self._registerProt(protSWARM, 'outputVolume')
