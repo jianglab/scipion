@@ -114,7 +114,7 @@ ampContr = 0.1
 sphAberr = 2.
 volKv = 300
 sampRate = 3.54
-TIMEOUT = 0.5*60
+TIMEOUT = 1*60
 blackOnWhite = True
 highCPUusage = 32
 # ----------------------------------------------------- #
