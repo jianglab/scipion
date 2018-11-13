@@ -57,8 +57,8 @@ DogPickerProtPicking = pwutils.importFromPlugin('appion.protocols', 'DogPickerPr
 SparxGaussianProtPicking = pwutils.importFromPlugin('eman2.protocols', 'SparxGaussianProtPicking')
 EmanProtInitModel = pwutils.importFromPlugin('eman2.protocols', 'EmanProtInitModel')
 
-ProtRelion2Autopick = pwutils.importFromPlugin('relion.protocols', 'ProtRelion2Autopick')
-ProtRelionExtractParticles = pwutils.importFromPlugin('relion.protocols', 'ProtRelionExtractParticles')
+# ProtRelion2Autopick = pwutils.importFromPlugin('relion.protocols', 'ProtRelion2Autopick')
+# ProtRelionExtractParticles = pwutils.importFromPlugin('relion.protocols', 'ProtRelionExtractParticles')
 ProtRelionClassify2D = pwutils.importFromPlugin('relion.protocols', 'ProtRelionClassify2D')
 
 try:
@@ -73,7 +73,8 @@ try:
                                   XmippProtScreenParticles,
                                   XmippProtReconstructSignificant, XmippProtRansac,
                                   XmippProtAlignVolume, XmippProtReconstructSwarm,
-                                  XmippProtStrGpuCrrSimple, XmippProtCropResizeVolumes)
+                                  XmippProtStrGpuCrrSimple, XmippProtCropResizeVolumes,
+                                  XmippProtEliminateEmptyClasses)
 except Exception as exc:
      pwutils.pluginNotFound('xmipp', errorMsg=exc)
 
@@ -91,10 +92,10 @@ def setExtendedInput(protDotInput, lastProt, extended):
 
 
 # Form:   --------------------------------------------- #
-gpuMotion = -1
-gpuGctf = -1
-gpuCryolo = -1
-gpuRelion = -1
+gpuMotion = -1 if ProtMotionCorr is not None else -1
+gpuGctf = -1 if ProtGctf is not None else -1
+gpuCryolo = 1  # if ProtGctf is not None else -1
+gpuRelion = -1 if ProtRelionClassify2D is not None else -1
 gpuGl2d = -1
 frame1 = 1
 frameN = 0
@@ -348,7 +349,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         if gpuCryolo>-1:
             protPP2 = self.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
                                        objLabel='Sphire - CrYolo auto-picking',
-                                       gpuList=str(gpuCryolo),
+                                       # gpuList=str(gpuCryolo),
                                        boxSize=bxSize)
             setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
             self._registerProt(protPP2, 'outputCoordinates', wait=False, monitor=False)
@@ -556,6 +557,13 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL, 'outputClasses', wait=False)
 
+        # --------- AUTO CLASS SELECTION I---------------------------
+        protCLSEL1 = self.newProtocol(XmippProtEliminateEmptyClasses,
+                                     objLabel='Xmipp - Auto class selection I',
+                                     threshold=8.0)
+        setExtendedInput(protCLSEL1.inputClasses, protCL, 'outputClasses')
+        self._registerProt(protCLSEL1, 'outputAverages')
+
         # --------- Relion 2D classify ---------------------------
         protCL2 = self.newProtocol(ProtRelionClassify2D,
                                    objLabel='Relion - 2D classifying',
@@ -566,44 +574,51 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
         self._registerProt(protCL2, 'outputClasses', wait=False)
 
-        if not schedule:
-            self._waitOutput(protCL, 'outputClasses')
-        # --------- CONVERT TO AVERAGES 1---------------------------
-        protAVER1 = self.newProtocol(ProtUserSubSet,
-                                     objLabel='Classes -> Averages I',
-                                     outputClassName="SetOfAverages",
-                                     sqliteFile=os.path.join(protCL._getPath(),
-                                                             "classes2D.sqlite,")
-                                     )
-        setExtendedInput(protAVER1.inputObject, protCL, 'outputClasses')
-        self._registerProt(protAVER1, 'outputRepresentatives', monitor=False)
+        # --------- AUTO CLASS SELECTION I---------------------------
+        protCLSEL2 = self.newProtocol(XmippProtEliminateEmptyClasses,
+                                     objLabel='Xmipp - Auto class selection II',
+                                     threshold=8.0)
+        setExtendedInput(protCLSEL2.inputClasses, protCL2, 'outputClasses')
+        self._registerProt(protCLSEL2, 'outputAverages')
 
-        if not schedule:
-            self._waitOutput(protCL2, 'outputClasses')
-        # --------- CONVERT TO AVERAGES 2---------------------------
-        protAVER2 = self.newProtocol(ProtUserSubSet,
-                                     objLabel='Classes -> Averages II',
-                                     outputClassName="SetOfAverages",
-                                     sqliteFile=os.path.join(protCL2._getPath(),
-                                                             "classes2D.sqlite,")
-                                     )
-        setExtendedInput(protAVER2.inputObject, protCL2, 'outputClasses')
-        self._registerProt(protAVER2, 'outputRepresentatives', monitor=False)
+        # if not schedule:
+        #     self._waitOutput(protCL, 'outputClasses')
+        # # --------- CONVERT TO AVERAGES 1---------------------------
+        # protAVER1 = self.newProtocol(ProtUserSubSet,
+        #                              objLabel='Classes -> Averages I',
+        #                              outputClassName="SetOfAverages",
+        #                              sqliteFile=os.path.join(protCL._getPath(),
+        #                                                      "classes2D.sqlite,")
+        #                              )
+        # setExtendedInput(protAVER1.inputObject, protCL, 'outputClasses')
+        # self._registerProt(protAVER1, 'outputRepresentatives', monitor=False)
+        #
+        # if not schedule:
+        #     self._waitOutput(protCL2, 'outputClasses')
+        # # --------- CONVERT TO AVERAGES 2---------------------------
+        # protAVER2 = self.newProtocol(ProtUserSubSet,
+        #                              objLabel='Classes -> Averages II',
+        #                              outputClassName="SetOfAverages",
+        #                              sqliteFile=os.path.join(protCL2._getPath(),
+        #                                                      "classes2D.sqlite,")
+        #                              )
+        # setExtendedInput(protAVER2.inputObject, protCL2, 'outputClasses')
+        # self._registerProt(protAVER2, 'outputRepresentatives', monitor=False)
 
         # --------- JOIN SETS ---------------------------
         protJOIN = self.newProtocol(ProtUnionSet, objLabel='Scipion - Join sets')
         setExtendedInput(protJOIN.inputSets,
-                         [protAVER1, protAVER2],
-                         ['outputRepresentatives', 'outputRepresentatives'])
+                         [protCLSEL1, protCLSEL2],
+                         ['outputAverages', 'outputAverages'])
         self._registerProt(protJOIN, 'outputSet', monitor=False)
 
-        # --------- AUTO CLASS SELECTION ---------------------------
-        protCLSEL = self.newProtocol(XmippProtEliminateEmptyParticles,
-                                     objLabel='Xmipp - Auto class selection',
-                                     inputType=1,
-                                     threshold=8.0)
-        setExtendedInput(protCLSEL.inputAverages, protJOIN, 'outputSet')
-        self._registerProt(protCLSEL, 'outputAverages')
+        # # --------- AUTO CLASS SELECTION ---------------------------
+        # protCLSEL = self.newProtocol(XmippProtEliminateEmptyClasses,
+        #                              objLabel='Xmipp - Auto class selection',
+        #                              inputType=1,
+        #                              threshold=8.0)
+        # setExtendedInput(protCLSEL.inputClasses, protJOIN, 'outputSet')
+        # self._registerProt(protCLSEL, 'outputAverages')
 
 
         # ***************   INITIAL VOLUME   ***********************************
@@ -613,7 +628,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                        objLabel='Eman - Initial vol',
                                        symmetryGroup=symmGr,
                                        numberOfThreads=int(highCPUusage/4))
-        setExtendedInput(protINITVOL.inputSet, protCLSEL, 'outputAverages')
+        setExtendedInput(protINITVOL.inputSet, protJOIN, 'outputSet')
         self._registerProt(protINITVOL)
 
         # --------- RECONSTRUCT SIGNIFICANT ---------------------------
@@ -621,7 +636,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                    objLabel='Xmipp - Recons. significant',
                                    symmetryGroup=symmGr,
                                    numberOfMpi=int(highCPUusage/2))
-        setExtendedInput(protSIG.inputSet, protCLSEL, 'outputAverages')
+        setExtendedInput(protSIG.inputSet, protJOIN, 'outputSet')
         self._registerProt(protSIG)
 
         # --------- RECONSTRUCT RANSAC ---------------------------
@@ -629,7 +644,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
                                    objLabel='Xmipp - Ransac significant',
                                    symmetryGroup=symmGr,
                                    numberOfThreads=int(highCPUusage/4))
-        setExtendedInput(protRAN.inputSet, protCLSEL, 'outputAverages')
+        setExtendedInput(protRAN.inputSet, protJOIN, 'outputSet')
         self._registerProt(protRAN)
 
         #  FIXME: ADD WAIT IF NOT SCHEDULE
