@@ -118,6 +118,7 @@ sampRate = 3.54
 TIMEOUT = 1*60
 blackOnWhite = True
 highCPUusage = 32
+partsToClass = 2000
 # ----------------------------------------------------- #
 
 
@@ -543,7 +544,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         # --------- TRIGGER PARTS ---------------------------
         protTRIG2 = self.newProtocol(XmippProtTriggerData,
                                      objLabel='Xmipp - trigger data to classify',
-                                     outputSize=5000, delay=30,
+                                     outputSize=partsToClass, delay=30,
                                      allImages=False)
         setExtendedInput(protTRIG2.inputImages, protSCR, 'outputParticles')
         self._registerProt(protTRIG2, 'outputParticles', monitor=False)
