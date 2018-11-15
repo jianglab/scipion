@@ -95,7 +95,7 @@ def setExtendedInput(protDotInput, lastProt, extended):
 projName = 'TestPreprocessStreamingWorkflow'  # do NOT change!!
 gpuMotion = -1 if ProtMotionCorr is not None else -1
 gpuGctf = -1 if ProtGctf is not None else -1
-gpuCryolo = 1  # if ProtGctf is not None else -1
+gpuCryolo = 1  # if ProtCryolo is not None else -1
 gpuRelion = -1 if ProtRelionClassify2D is not None else -1
 gpuGl2d = -1
 frame1 = 1
@@ -610,7 +610,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protJOIN = self.newProtocol(ProtUnionSet, objLabel='Scipion - Join sets')
         setExtendedInput(protJOIN.inputSets,
                          [protCLSEL1, protCLSEL2],
-                         ['outputAverages', 'outputAverages'])
+                         ['outputClasses', 'outputClasses'])
         self._registerProt(protJOIN, 'outputSet', monitor=False)
 
         # # --------- AUTO CLASS SELECTION ---------------------------
