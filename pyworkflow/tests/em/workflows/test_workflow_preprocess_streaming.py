@@ -92,6 +92,7 @@ def setExtendedInput(protDotInput, lastProt, extended):
 
 
 # Form:   --------------------------------------------- #
+projName = 'TestPreprocessStreamingWorkflow'  # do NOT change!!
 gpuMotion = -1 if ProtMotionCorr is not None else -1
 gpuGctf = -1 if ProtGctf is not None else -1
 gpuCryolo = 1  # if ProtGctf is not None else -1
@@ -109,7 +110,8 @@ symmGr = 'd2'
 # ----------------------------------------------------- #
 
 # Conf.: ---------------------------------------------- #
-projName = 'TestPreprocessStreamingWorkflow'
+# path/*.mrc (do NOT use ~ for home) or (datasetName, pattern):
+depositionPattern = ('relion13_tutorial', 'betagal/Micrographs/*mrcs')  #  "/path/to/the/deposition/folder/*.mrcs"  #
 schedule = True
 ampContr = 0.1
 sphAberr = 2.
@@ -126,16 +128,10 @@ class TestPreprocessStreamingWorkflow(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        # if os.path.exists(cls.proj.path):
-        #     print("\n >>> WARNING: 'cls.proj.path' already exists,\n"
-        #             "     do you want to overwrite it? >>> (YES/no) <<< ")
-        #     yesno = raw_input()
-        #     if yesno.lower() == 'no':
-        #         sys.exit(0)
-        #     else:
-        #         shutil.rmtree(cls.proj.path)
-        cls.ds = DataSet('relion13_tutorial', 'relion13_tutorial', '')
-        cls.ds = DataSet.getDataSet('relion13_tutorial')
+        cls.isTest = type(depositionPattern) == tuple
+        if cls.isTest:
+            cls.ds = DataSet(depositionPattern[0], depositionPattern[0], '')
+            cls.ds = DataSet.getDataSet(depositionPattern[0])
         cls.importThread = threading.Thread(target=cls._createInputLinks)
         cls.importThread.start()
         # Wait until the first link is created
@@ -144,11 +140,15 @@ class TestPreprocessStreamingWorkflow(BaseTest):
     @classmethod
     def _createInputLinks(cls):
         # Create a test folder path
-        pattern = cls.ds.getFile('betagal/Micrographs/*mrcs')
+        pattern = cls.ds.getFile(depositionPattern[1]) \
+                    if cls.isTest else depositionPattern
+
         files = glob(pattern)
 
         # the amount of input data is defined here
         nFiles = len(files)
+
+        assert nFiles > 0, "No files found matching '%s'" % pattern
 
         for i in range(nFiles):
             # Loop over the number of input movies if we want more for testing
