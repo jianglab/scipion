@@ -34,6 +34,7 @@ This module contains protocols related to Set operations such us:
 import random
 from protocol import EMProtocol
 import pyworkflow.protocol as pwprot
+from pyworkflow.em import SetOfClasses, SetOfClasses2D
 from pyworkflow.object import Boolean
 
 class ProtSets(EMProtocol):
@@ -132,7 +133,11 @@ class ProtUnionSet(ProtSets):
         set1 = self.inputSets[0].get()  # 1st set (we use it many times)
 
         # Read ClassName and create the corresponding EMSet (SetOfParticles...)
-        outputSet = getattr(self, "_create%s" % set1.getClassName())()
+        print(set1.getClass())
+        if issubclass(set1.getClass(), SetOfClasses):
+            outputSet = getattr(self, "_create%s" % set1.getClassName())(set1.getImages())
+        else:
+            outputSet = getattr(self, "_create%s" % set1.getClassName())()
 
         # Copy info from input sets (sampling rate, etc).
         outputSet.copyInfo(set1)  # all sets must have the same info as set1!
