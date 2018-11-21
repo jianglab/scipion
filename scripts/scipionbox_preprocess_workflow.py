@@ -965,8 +965,8 @@ class BoxWizardView(tk.Frame):
         # --------- Relion 2D classify ---------------------------
         protCL2 = project.newProtocol(ProtRelionClassify2D,
                                       objLabel='Relion - 2D classifying',
-                                      useGpu=self.get(RELION) > -1,
-                                      gpuList=self._getValue(RELION),
+                                      doGpu=self.get(RELION) > -1,
+                                      gpusToUse=self._getValue(RELION),
                                       numberOfClasses=16,
                                       numberOfMpi=int(self.get(highCPUusage) / 2))
         setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
