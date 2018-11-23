@@ -54,7 +54,7 @@ from pyworkflow.object import Pointer
 from pyworkflow.em.protocol import (ProtImportMovies, ProtMonitorSummary,
                                     ProtImportMicrographs, ProtImportAverages,
                                     ProtSubSet, ProtUnionSet, ProtUserSubSet,
-                                    ProtExtractCoords)
+                                    ProtExtractCoords, ProtMonitor2dStreamer)
 
 # Plugin imports
 ProtMotionCorr = pwutils.importFromPlugin('motioncorr.protocols', 'ProtMotionCorr')
@@ -865,30 +865,6 @@ class BoxWizardView(tk.Frame):
         setExtendedInput(protSCRor.inputParticles, protTRIGor, 'outputParticles')
         _registerProt(protSCRor, 'outputParticles')
 
-        # --------- EXTRACT COORD ----------------------------
-        protExtraC = project.newProtocol(ProtExtractCoords,
-                                         objLabel='Scipion - extrac coord.')
-        setExtendedInput(protExtraC.inputParticles, protSCRor, 'outputParticles')
-        setExtendedInput(protExtraC.inputMicrographs, protPreMics, 'outputMicrographs')
-        _registerProt(protExtraC)
-
-        # --------- EXTRACT FULL SIZE PART ------------------
-        fullBoxSize = int(self.get(PARTSIZE) / self.get(SAMPLING)) + 1
-        protExtraFull = project.newProtocol(XmippProtExtractParticles,
-                                            objLabel='Xmipp - extract part. FULL SIZE',
-                                            boxSize=fullBoxSize,
-                                            downsampleType=1,  # other mics
-                                            doRemoveDust=True,
-                                            doNormalize=True,
-                                            doInvert=self.get(blackOnWhite),
-                                            doFlip=True)
-        setExtendedInput(protExtraFull.inputCoordinates,
-                         protExtraC, 'outputCoordinates')
-        setExtendedInput(protExtraFull.inputMicrographs,
-                         protCTFs, 'outputMicrographs')
-        setExtendedInput(protExtraFull.ctfRelations, protCTFs, 'outputCTF')
-        _registerProt(protExtraFull, 'outputParticles')
-
         # ----------------------------- END OF OR/SINGLE PICKING BRANCH --------
 
         # ----------------------------- AND PICKING BRANCH ---------------------
@@ -1042,14 +1018,52 @@ class BoxWizardView(tk.Frame):
 
         # ************   FINAL PROTOCOLS   *************************************
 
-        # --------- GL2D in streaming --------------------
-        if self.get(GL2D) > -1:
-            protGL2D = project.newProtocol(XmippProtStrGpuCrrSimple,
-                                        objLabel='Xmipp - GL2D static',
-                                        gpuList=self._getValue(GL2D))
-            setExtendedInput(protGL2D.inputRefs, protJOIN, 'outputSet')
-            setExtendedInput(protGL2D.inputParticles, protSCRor, 'outputParticles')
-            _registerProt(protGL2D, 'outputClasses')
+        # --------- ADDING 2D CLASSIFIERS -------------------------
+        protStreamer = project.newProtocol(ProtMonitor2dStreamer,
+                                           objLabel='Scipion - Streamer',
+                                           input2dProtocol=protCL2,
+                                           batchSize=2000,
+                                           startingNumber=self.get(partsToClass),
+                                           samplingInterval=1)
+        setExtendedInput(protStreamer.inputParticles, protSCRor, 'outputParticles')
+        protStreamer.addPrerequisites(protCL2.getObjId())
+        _registerProt(protStreamer)
+
+        # -------------------------- FULL SIZE PARTICLES -----
+        # --------- EXTRACT COORD ----------------------------
+        protExtraC = project.newProtocol(ProtExtractCoords,
+                                         objLabel='Scipion - extrac coord.')
+        setExtendedInput(protExtraC.inputParticles, protSCRor, 'outputParticles')
+        setExtendedInput(protExtraC.inputMicrographs, protPreMics, 'outputMicrographs')
+        _registerProt(protExtraC)
+
+        # --------- EXTRACT FULL SIZE PART ------------------
+        fullBoxSize = int(self.get(PARTSIZE) / self.get(SAMPLING)) + 1
+        protExtraFull = project.newProtocol(XmippProtExtractParticles,
+                                            objLabel='Xmipp - extract part. FULL SIZE',
+                                            boxSize=fullBoxSize,
+                                            downsampleType=1,  # other mics
+                                            doRemoveDust=True,
+                                            doNormalize=True,
+                                            doInvert=self.get(blackOnWhite),
+                                            doFlip=True)
+        setExtendedInput(protExtraFull.inputCoordinates,
+                         protExtraC, 'outputCoordinates')
+        setExtendedInput(protExtraFull.inputMicrographs,
+                         protCTFs, 'outputMicrographs')
+        setExtendedInput(protExtraFull.ctfRelations, protCTFs, 'outputCTF')
+        _registerProt(protExtraFull, 'outputParticles')
+
+
+
+        # # --------- GL2D in streaming --------------------
+        # if self.get(GL2D) > -1:
+        #     protGL2D = project.newProtocol(XmippProtStrGpuCrrSimple,
+        #                                 objLabel='Xmipp - GL2D static',
+        #                                 gpuList=self._getValue(GL2D))
+        #     setExtendedInput(protGL2D.inputRefs, protJOIN, 'outputSet')
+        #     setExtendedInput(protGL2D.inputParticles, protSCRor, 'outputParticles')
+        #     _registerProt(protGL2D, 'outputClasses')
 
         # --------- SUMMARY MONITOR -----------------------
         protMonitor = project.newProtocol(ProtMonitorSummary,
