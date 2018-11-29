@@ -610,7 +610,7 @@ class TestPreprocessStreamingWorkflow(BaseTest):
         protJOIN = self.newProtocol(ProtUnionSet, objLabel='Scipion - Join sets')
         setExtendedInput(protJOIN.inputSets,
                          [protCLSEL1, protCLSEL2],
-                         ['outputClasses', 'outputClasses'])
+                         ['outputAverages', 'outputAverages'])
         self._registerProt(protJOIN, 'outputSet', monitor=False)
 
         # # --------- AUTO CLASS SELECTION ---------------------------
