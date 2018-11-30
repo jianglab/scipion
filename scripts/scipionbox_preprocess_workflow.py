@@ -108,7 +108,7 @@ OPTICAL_FLOW = "OPTICAL_FLOW"
 GCTF = "GCTF"
 CRYOLO = 'CRYOLO'
 RELION = 'RELION'
-GL2D = 'GL2D'
+# GL2D = 'GL2D'
 
 # Some related environment variables
 DATA_FOLDER = 'DATA_FOLDER'
@@ -129,6 +129,7 @@ TIMEOUT = 'TIMEOUT'
 blackOnWhite = 'blackOnWhite'
 highCPUusage = 'highCPUusage'
 partsToClass = 'partsToClass'
+WAIT2PICK = 'WAIT2PICK'
 
 
 # Define some string constants for the form
@@ -148,7 +149,7 @@ LABELS = {
     RELION: "Relion",
     OPTICAL_FLOW: "Optical Flow",
     GCTF: "gCtf",
-    GL2D: "GL2D"
+    # GL2D: "GL2D"
 }
 
 # desired casting for the parameters (form and config)
@@ -345,7 +346,7 @@ class BoxWizardView(tk.Frame):
         _addPair(GCTF, 2, labelFrame3, t2="(if not, ctfFind4 will be used)", default='-1')
         _addPair(CRYOLO, 3, labelFrame3, t2="(if not, there are other pickers)", default='-1')
         _addPair(RELION, 4, labelFrame3, t2="(if not, Relion with CPU will be used)", default='-1')
-        _addPair(GL2D, 5, labelFrame3, t2="(if not, no reclasification will be done)", default='-1')
+        # _addPair(GL2D, 5, labelFrame3, t2="(if not, no reclasification will be done)", default='-1')
 
         frame.columnconfigure(0, weight=1)
 
@@ -557,10 +558,16 @@ class BoxWizardView(tk.Frame):
 
         preprocessWorkflow(project, dataPath, self.configDict)
 
-        os.system('%s python %s %s &' % (pw.getScipionScript(),
+        ignoreOption = ('' if self._getConfValue(WAIT2PICK) == 'False' else
+                        '--ignore XmippProtParticlePicking')
+
+
+        os.system('%s python %s %s %s &' % (pw.getScipionScript(),
                                          pw.getScipionPath('scripts/schedule_project.py'),
-                                         projName))
-        
+                                         projName, ignoreOption))
+
+
+
         os.system('%s project %s &' % (pw.getScipionScript(), projName))
         
         self.windows.close()
