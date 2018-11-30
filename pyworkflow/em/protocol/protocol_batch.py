@@ -509,7 +509,6 @@ class ProtCreateMask(BatchProtocol):
         return self._summary()
 
 
-
 class ProtCreateFSC(BatchProtocol):
 
     def _defineParams(self, form):
