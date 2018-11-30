@@ -176,7 +176,8 @@ formatsParameters = {PARTSIZE: int,
                      GCTF: int,
                      CRYOLO: int,
                      RELION: int,
-                     GL2D: int}
+                     # GL2D: int
+                     }
 
 class BoxWizardWindow(ProjectBaseWindow):
     """ Windows to manage all projects. """
