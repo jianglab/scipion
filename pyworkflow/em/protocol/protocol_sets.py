@@ -34,8 +34,8 @@ This module contains protocols related to Set operations such us:
 import random
 from protocol import EMProtocol
 import pyworkflow.protocol as pwprot
-from pyworkflow.em import SetOfClasses, SetOfClasses2D
 from pyworkflow.object import Boolean
+from pyworkflow.em.data import SetOfClasses
 
 class ProtSets(EMProtocol):
     """ Base class for all protocols related to subsets. """
@@ -133,11 +133,7 @@ class ProtUnionSet(ProtSets):
         set1 = self.inputSets[0].get()  # 1st set (we use it many times)
 
         # Read ClassName and create the corresponding EMSet (SetOfParticles...)
-        print(set1.getClass())
-        if issubclass(set1.getClass(), SetOfClasses):
-            outputSet = getattr(self, "_create%s" % set1.getClassName())(set1.getImages())
-        else:
-            outputSet = getattr(self, "_create%s" % set1.getClassName())()
+        outputSet = getattr(self, "_create%s" % set1.getClassName())()
 
         # Copy info from input sets (sampling rate, etc).
         outputSet.copyInfo(set1)  # all sets must have the same info as set1!
@@ -239,6 +235,11 @@ class ProtUnionSet(ProtSets):
         if len(classes) > 1:
             return ["All objects should have the same type.",
                     "Types of objects found: %s" % ", ".join(classes)]
+        if issubclass(type(self.inputSets[0].get()), SetOfClasses):
+            return["Is not posible to join different sets of classes.\n"
+                   "If you want to join diferent representative, extract them "
+                   "with the viewer and them run this protocol with the "
+                   "resulting averages."]
         return []  # no errors
 
     def _warnings(self):
