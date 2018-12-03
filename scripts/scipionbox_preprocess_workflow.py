@@ -108,7 +108,7 @@ OPTICAL_FLOW = "OPTICAL_FLOW"
 GCTF = "GCTF"
 CRYOLO = 'CRYOLO'
 RELION = 'RELION'
-# GL2D = 'GL2D'
+GL2D = 'GL2D'
 
 # Some related environment variables
 DATA_FOLDER = 'DATA_FOLDER'
@@ -118,6 +118,7 @@ SAMPLE_NAME = 'SAMPLE_NAME'
 # - conf - #
 DEPOSITION_PATH = 'DEPOSITION_PATH'
 PATTERN = 'PATTERN'
+GAIN_PAT = 'GAIN_PAT'
 SCIPION_PROJECT = 'SCIPION_PROJECT'
 SIMULATION = 'SIMULATION'
 RAWDATA_SIM = 'RAWDATA_SIM'
@@ -126,9 +127,9 @@ SPH_AB = 'SPH_AB'
 VOL_KV = 'VOL_KV'
 SAMPLING = 'SAMPLING'
 TIMEOUT = 'TIMEOUT'
-blackOnWhite = 'blackOnWhite'
-highCPUusage = 'highCPUusage'
-partsToClass = 'partsToClass'
+INV_CONTR = 'INV_CONTR'
+NUM_CPU = 'NUM_CPU'
+PARTS2CLASS = 'PARTS2CLASS'
 WAIT2PICK = 'WAIT2PICK'
 
 
@@ -149,21 +150,22 @@ LABELS = {
     RELION: "Relion",
     OPTICAL_FLOW: "Optical Flow",
     GCTF: "gCtf",
-    # GL2D: "GL2D"
+    GL2D: "GL2D"
 }
 
 # desired casting for the parameters (form and config)
 formatConfParameters = {SIMULATION: bool,
                         RAWDATA_SIM: str,
                         PATTERN: str,
+                        GAIN_PAT: str,
                         AMP_CONTR: float,
                         SPH_AB: float,
                         VOL_KV: float,
                         SAMPLING: float,
                         TIMEOUT: 'splitTimesFloat',
-                        blackOnWhite: bool,
-                        highCPUusage: int,
-                        partsToClass: int}
+                        INV_CONTR: bool,
+                        NUM_CPU: int,
+                        PARTS2CLASS: int}
 
 formatsParameters = {PARTSIZE: int,
                      SYMGROUP: str,
@@ -176,7 +178,7 @@ formatsParameters = {PARTSIZE: int,
                      GCTF: int,
                      CRYOLO: int,
                      RELION: int,
-                     # GL2D: int
+                     GL2D: int
                      }
 
 class BoxWizardWindow(ProjectBaseWindow):
@@ -347,7 +349,7 @@ class BoxWizardView(tk.Frame):
         _addPair(GCTF, 2, labelFrame3, t2="(if not, ctfFind4 will be used)", default='-1')
         _addPair(CRYOLO, 3, labelFrame3, t2="(if not, there are other pickers)", default='-1')
         _addPair(RELION, 4, labelFrame3, t2="(if not, Relion with CPU will be used)", default='-1')
-        # _addPair(GL2D, 5, labelFrame3, t2="(if not, no reclasification will be done)", default='-1')
+        _addPair(GL2D, 5, labelFrame3, t2="(if not, no reclasification will be done)", default='-1')
 
         frame.columnconfigure(0, weight=1)
 
@@ -424,7 +426,7 @@ class BoxWizardView(tk.Frame):
                     newvar = cast(value)
 
                 self.configDict.update({var: newvar})
-            except ValueError as e:
+            except Exception as e:
                 if cast == int:
                     errors.append("'%s' should be an integer" % LABELS.get(var))
                 elif cast == float:
@@ -521,13 +523,15 @@ class BoxWizardView(tk.Frame):
         self.castConf()
 
         if self.configDict.get(SIMULATION):
-            rawData = os.path.join(pwutils.expanduser(
-                        self._getConfValue(RAWDATA_SIM)),
-                        self._getConfValue(PATTERN))
 
-            os.system('%s python %s "%s" %s %d&' % (pw.getScipionScript(),
+            rawData = os.path.join(pwutils.expanduser(
+                        self._getConfValue(RAWDATA_SIM)))
+                        
+            os.system('%s python %s "%s" %s %d %s &' % (pw.getScipionScript(),
                             pw.getScipionPath('scripts/simulate_acquisition.py'),
-                            rawData, dataPath, self.configDict.get(TIMEOUT)))
+                            os.path.join(rawData, self._getConfValue(PATTERN)),
+                            dataPath, self.configDict.get(TIMEOUT),
+                            os.path.join(rawData, self._getConfValue(GAIN_PAT))))
 
         manager = Manager()
         project = manager.createProject(projName, location=scipionProjPath)
@@ -635,6 +639,8 @@ def preprocessWorkflow(project, dataPath, configDict):
                               samplingRate=configDict.get(SAMPLING),
                               doseInitial=configDict.get(DOSE0),
                               dosePerFrame=configDict.get(DOSEF),
+                              gainFile=os.path.join(dataPath, 
+                                                    configDict.get(GAIN_PAT)),
                               dataStreaming=True,
                               timeout=configDict.get(TIMEOUT))
     _registerProt(protImport, 'outputMovies')
@@ -737,7 +743,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protPreMics = project.newProtocol(XmippProtPreprocessMicrographs,
                                       objLabel='Xmipp - preprocess Mics',
                                       doRemoveBadPix=True,
-                                      doInvert=configDict.get(blackOnWhite),
+                                      doInvert=configDict.get(INV_CONTR),
                                       doDownsample=configDict.get(SAMPLING) < 3,
                                       downFactor=downSampPreMics)
     setExtendedInput(protPreMics.inputMicrographs,
@@ -919,7 +925,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- TRIGGER PARTS ---------------------------
     protTRIG2 = project.newProtocol(XmippProtTriggerData,
                                     objLabel='Xmipp - trigger data to classify',
-                                    outputSize=configDict.get(partsToClass),
+                                    outputSize=configDict.get(PARTS2CLASS),
                                     delay=30,
                                     allImages=False)
     setExtendedInput(protTRIG2.inputImages, protSCR, 'outputParticles')
@@ -930,7 +936,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                  objLabel='Xmipp - Cl2d',
                                  doCore=False,
                                  numberOfClasses=16,
-                                 numberOfMpi=int(configDict.get(highCPUusage) / 2))
+                                 numberOfMpi=int(configDict.get(NUM_CPU) / 2))
     setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
     _registerProt(protCL)
 
@@ -947,7 +953,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                   doGpu=configDict.get(RELION) > -1,
                                   gpusToUse=configDict.get(RELION),
                                   numberOfClasses=16,
-                                  numberOfMpi=int(configDict.get(highCPUusage) / 2))
+                                  numberOfMpi=int(configDict.get(NUM_CPU) / 2))
     setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
     _registerProt(protCL2)
 
@@ -971,7 +977,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protINITVOL = project.newProtocol(EmanProtInitModel,
                                       objLabel='Eman - Initial vol',
                                       symmetryGroup=configDict.get(SYMGROUP),
-                                      numberOfThreads=int(configDict.get(highCPUusage)/4))
+                                      numberOfThreads=int(configDict.get(NUM_CPU) / 4))
     setExtendedInput(protINITVOL.inputSet, protJOIN, 'outputSet')
     _registerProt(protINITVOL)
 
@@ -979,7 +985,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protSIG = project.newProtocol(XmippProtReconstructSignificant,
                                   objLabel='Xmipp - Recons. significant',
                                   symmetryGroup=configDict.get(SYMGROUP),
-                                  numberOfMpi=int(configDict.get(highCPUusage)/2))
+                                  numberOfMpi=int(configDict.get(NUM_CPU) / 2))
     setExtendedInput(protSIG.inputSet, protJOIN, 'outputSet')
     _registerProt(protSIG)
 
@@ -987,14 +993,14 @@ def preprocessWorkflow(project, dataPath, configDict):
     protRAN = project.newProtocol(XmippProtRansac,
                                   objLabel='Xmipp - Ransac significant',
                                   symmetryGroup=configDict.get(SYMGROUP),
-                                  numberOfThreads=int(configDict.get(highCPUusage)/4))
+                                  numberOfThreads=int(configDict.get(NUM_CPU) / 4))
     setExtendedInput(protRAN.inputSet, protJOIN, 'outputSet')
     _registerProt(protRAN)
 
     # --------- CREATING AN ALIGNED SET OF VOLUMES -----------
     protAVOL = project.newProtocol(XmippProtAlignVolume,
                                    objLabel='Xmipp - Join/Align volumes',
-                                   numberOfThreads=configDict.get(highCPUusage))
+                                   numberOfThreads=configDict.get(NUM_CPU))
     setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
     setExtendedInput(protAVOL.inputVolumes,
                      [protINITVOL, protRAN, protSIG],
@@ -1005,7 +1011,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protSWARM = project.newProtocol(XmippProtReconstructSwarm,
                                     objLabel='Xmipp - Swarm init. vol.',
                                     symmetryGroup=configDict.get(SYMGROUP),
-                                    numberOfMpi=configDict.get(highCPUusage))
+                                    numberOfMpi=configDict.get(NUM_CPU))
     setExtendedInput(protSWARM.inputParticles, protTRIG2, 'outputParticles')
     setExtendedInput(protSWARM.inputVolumes, protAVOL, 'outputVolumes')
     _registerProt(protSWARM, 'outputVolume')
@@ -1026,7 +1032,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                        objLabel='Scipion - Streamer',
                                        input2dProtocol=protCL2,
                                        batchSize=2000,
-                                       startingNumber=configDict.get(partsToClass),
+                                       startingNumber=configDict.get(PARTS2CLASS),
                                        samplingInterval=1)
     setExtendedInput(protStreamer.inputParticles, protSCRor, 'outputParticles')
     protStreamer.addPrerequisites(protCL2.getObjId())
@@ -1048,7 +1054,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                         downsampleType=1,  # other mics
                                         doRemoveDust=True,
                                         doNormalize=True,
-                                        doInvert=configDict.get(blackOnWhite),
+                                        doInvert=configDict.get(INV_CONTR),
                                         doFlip=True)
     setExtendedInput(protExtraFull.inputCoordinates,
                      protExtraC, 'outputCoordinates')
