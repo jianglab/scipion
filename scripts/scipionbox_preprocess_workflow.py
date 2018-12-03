@@ -734,7 +734,7 @@ def preprocessWorkflow(project, dataPath, configDict):
 
     # *************   PICKING   ********************************************
     # Resizing to a sampling rate larger than 3A/px
-    downSampPreMics = configDict.get(SAMPLING) / 3 if configDict.get(SAMPLING) < 3 else 1
+    downSampPreMics = 3 / configDict.get(SAMPLING) if configDict.get(SAMPLING) < 3 else 1
     # Fixing an even boxsize big enough: int(x/2+1)*2 = ceil(x/2)*2 = even!
     bxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)
                  / downSampPreMics / 2 + 1) * 2
