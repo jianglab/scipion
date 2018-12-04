@@ -108,7 +108,7 @@ OPTICAL_FLOW = "OPTICAL_FLOW"
 GCTF = "GCTF"
 CRYOLO = 'CRYOLO'
 RELION = 'RELION'
-# GL2D = 'GL2D'
+GL2D = 'GL2D'
 
 # Some related environment variables
 DATA_FOLDER = 'DATA_FOLDER'
@@ -149,7 +149,7 @@ LABELS = {
     RELION: "Relion",
     OPTICAL_FLOW: "Optical Flow",
     GCTF: "gCtf",
-    # GL2D: "GL2D"
+    GL2D: "GL2D"
 }
 
 # desired casting for the parameters (form and config)
@@ -176,7 +176,7 @@ formatsParameters = {PARTSIZE: int,
                      GCTF: int,
                      CRYOLO: int,
                      RELION: int,
-                     # GL2D: int
+                     GL2D: int
                      }
 
 class BoxWizardWindow(ProjectBaseWindow):
@@ -622,7 +622,7 @@ def preprocessWorkflow(project, dataPath, configDict):
 
 
     # ***********   MOVIES   ***********************************************
-    doDose = False if configDict.get(DOSEF) == 0 else True
+    doDose = False if configDict.get(DOSEF, 0) == 0 else True
     # ----------- IMPORT MOVIES -------------------
     protImport = project.newProtocol(ProtImportMovies,
                               objLabel='import movies',
@@ -649,7 +649,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protMG, 'outputImages')
 
     # ----------- MOTIONCOR ----------------------------
-    if configDict.get(MOTIONCOR2) > -1 and ProtMotionCorr is not None:
+    if configDict.get(MOTIONCOR2, -1) > -1 and ProtMotionCorr is not None:
         protMA = project.newProtocol(ProtMotionCorr,
                                      objLabel='MotionCor2 - movie align.',
                                      gpuList=configDict.get(MOTIONCOR2),
@@ -661,8 +661,8 @@ def preprocessWorkflow(project, dataPath, configDict):
         # ----------- CORR ALIGN ----------------------------
         protMA = project.newProtocol(XmippProtMovieCorr,
                                      objLabel='Xmipp - corr. align.',
-                                     alignFrame0=configDict.get(FRAMES)[0],
-                                     alignFrameN=configDict.get(FRAMES)[1])
+                                     alignFrame0=configDict.get(FRAMES, 1)[0],
+                                     alignFrameN=configDict.get(FRAMES, 0)[1])
         setExtendedInput(protMA.inputMovies, protImport, 'outputMovies')
         _registerProt(protMA, 'outputMovies')
 
@@ -673,7 +673,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protMax, 'outputMovies')
 
     # ----------- OF ALIGNMENT --------------------------
-    if configDict.get(OPTICAL_FLOW):
+    if configDict.get(OPTICAL_FLOW, False):
         protOF = project.newProtocol(XmippProtOFAlignment,
                                      objLabel='Xmipp - OF align.',
                                      doApplyDoseFilter=doDose, # --------------- ASK ---------------
@@ -696,7 +696,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protCTF1, 'outputCTF')
 
     # --------- CTF ESTIMATION 2 ---------------------------
-    if configDict.get(GCTF) > -1:
+    if configDict.get(GCTF, -1) > -1:
         protCTF2 = project.newProtocol(ProtGctf,
                                        objLabel='gCTF estimation',
                                        gpuList=configDict.get(GCTF))
@@ -752,7 +752,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protPP1, 'outputCoordinates')
 
     # --------- PARTICLE PICKING 2 ---------------------------
-    if configDict.get(CRYOLO) > -1:
+    if configDict.get(CRYOLO, -1) > -1:
         protPP2 = project.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
                                       objLabel='Sphire - CrYolo auto-picking',
                                       # gpuList=configDict.get(CRYOLO),
@@ -760,13 +760,15 @@ def preprocessWorkflow(project, dataPath, configDict):
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
         _registerProt(protPP2)
 
-    if configDict.get(MICS2PICK) > 0:
+    if configDict.get(MICS2PICK, -1) > 0:
         # -------- TRIGGER MANUAL-PICKER ---------------------------
+
         protTRIG0 = project.newProtocol(XmippProtTriggerData,
                                         objLabel='Xmipp - trigger some mics',
                                         outputSize=configDict.get(MICS2PICK),
                                         delay=30,
-                                        allImages=False)
+                                        allImages=configDict.get(WAIT2PICK, True)
+                                        )
         setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
         _registerProt(protTRIG0)
 
@@ -959,7 +961,8 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protCLSEL2, 'outputAverages')
 
     # --------- JOIN SETS ---------------------------
-    protJOIN = project.newProtocol(ProtUnionSet, objLabel='Scipion - Join sets')
+    protJOIN = project.newProtocol(ProtUnionSet,
+                                   objLabel='Scipion - Join GOOD averages')
     setExtendedInput(protJOIN.inputSets,
                      [protCLSEL1, protCLSEL2],
                      ['outputAverages', 'outputAverages'])
@@ -1060,13 +1063,20 @@ def preprocessWorkflow(project, dataPath, configDict):
 
 
     # # --------- GL2D in streaming --------------------
-    # if configDict.get(GL2D) > -1:
-    #     protGL2D = project.newProtocol(XmippProtStrGpuCrrSimple,
-    #                                 objLabel='Xmipp - GL2D static',
-    #                                 gpuList=configDict.get(GL2D))
-    #     setExtendedInput(protGL2D.inputRefs, protJOIN, 'outputSet')
-    #     setExtendedInput(protGL2D.inputParticles, protSCRor, 'outputParticles')
-    #     _registerProt(protGL2D, 'outputClasses')
+    if configDict.get(GL2D) > -1:
+        protJOIN2 = project.newProtocol(ProtUnionSet,
+                                        objLabel='Scipion - Join ALL averages')
+        setExtendedInput(protJOIN2.inputSets,
+                         [protJOIN, protCLSEL1, protCLSEL2],
+                         ['outputSet', 'eliminatedAverages', 'eliminatedAverages'])
+        _registerProt(protJOIN2)
+
+        protGL2D = project.newProtocol(XmippProtStrGpuCrrSimple,
+                                    objLabel='Xmipp - GL2D static',
+                                    gpuList=configDict.get(GL2D))
+        setExtendedInput(protGL2D.inputRefs, protJOIN2, 'outputSet')
+        setExtendedInput(protGL2D.inputParticles, protSCRor, 'outputParticles')
+        _registerProt(protGL2D, 'outputClasses')
 
     # --------- SUMMARY MONITOR -----------------------
     protMonitor = project.newProtocol(ProtMonitorSummary,
