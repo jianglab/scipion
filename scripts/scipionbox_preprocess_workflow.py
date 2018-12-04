@@ -167,7 +167,7 @@ formatConfParameters = {SIMULATION: bool,
                         NUM_CPU: int,
                         PARTS2CLASS: int}
 
-formatsParameters = {PARTSIZE: int,
+formatsParameters = {#PARTSIZE: int,
                      SYMGROUP: str,
                      FRAMES: 'splitInt',
                      DOSE0: float,
@@ -329,13 +329,13 @@ class BoxWizardView(tk.Frame):
         labelFrame2.grid(row=1, column=0, sticky='nw', padx=20, pady=10)
         labelFrame2.columnconfigure(0, minsize=120)
 
-        _addPair(PARTSIZE, 0, labelFrame2, t2='Angstroms')
-        _addPair(SYMGROUP, 1, labelFrame2, t2='(if unknown, set at c1)', default='c1')
-        _addPair(FRAMES, 2, labelFrame2, t2='ex: 2-15 (left empty to take all frames)')
-        _addPair(DOSE0, 3, labelFrame2, default='0', t2='e/A^2')
-        _addPair(DOSEF, 4, labelFrame2, default='0', t2='(if 0, no dose weight is applied)')
-        _addPair(OPTICAL_FLOW, 5, labelFrame2, entry='checkbox')
-        _addPair(MICS2PICK, 6, labelFrame2, t2='(if 0, only automatic picking is done)')
+        # _addPair(PARTSIZE, 0, labelFrame2, t2='Angstroms')
+        _addPair(SYMGROUP, 0, labelFrame2, t2='(if unknown, set at c1)', default='c1')
+        _addPair(FRAMES, 1, labelFrame2, t2='ex: 2-15 (left empty to take all frames)')
+        _addPair(DOSE0, 2, labelFrame2, default='0', t2='e/A^2')
+        _addPair(DOSEF, 3, labelFrame2, default='0', t2='(if 0, no dose weight is applied)')
+        _addPair(OPTICAL_FLOW, 4, labelFrame2, entry='checkbox')
+        _addPair(MICS2PICK, 5, labelFrame2, t2='(if 0, only automatic picking is done)')
 
 
         labelFrame3 = tk.LabelFrame(frame, text=' GPU usage ', bg='white',
@@ -474,9 +474,9 @@ class BoxWizardView(tk.Frame):
 
         # Do more checks only if there are not previous errors
         if not errors:
-            if self.configDict.get(PARTSIZE) == 0:
-                errors.append("'%s' should be larger than 0"
-                              % LABELS.get(PARTSIZE))
+            # if self.configDict.get(PARTSIZE) == 0:
+            #     errors.append("'%s' should be larger than 0"
+            #                   % LABELS.get(PARTSIZE))
 
 
 
@@ -515,10 +515,9 @@ class BoxWizardView(tk.Frame):
     
     def _createScipionProject(self, projName, dataPath, scipionProjPath):
 
-        print(">>> HERE <<<")
-        print("projName: %s" % projName)
-        print("dataPath: %s" % dataPath)
-        print("scipionProjPath: %s" % scipionProjPath)
+        print("Deposition Path: %s" % dataPath)
+        print("Project Name: %s" % projName)
+        print("Project Path: %s" % scipionProjPath)
 
         self.castConf()
 
@@ -526,12 +525,16 @@ class BoxWizardView(tk.Frame):
 
             rawData = os.path.join(pwutils.expanduser(
                         self._getConfValue(RAWDATA_SIM)))
+
+            gainGlob = pwutils.glob(os.path.join(rawData,
+                                                 self._getConfValue(GAIN_PAT)))
+            gainPath = gainGlob[0] if len(gainGlob) > 0 else ''
                         
             os.system('%s python %s "%s" %s %d %s &' % (pw.getScipionScript(),
                             pw.getScipionPath('scripts/simulate_acquisition.py'),
                             os.path.join(rawData, self._getConfValue(PATTERN)),
                             dataPath, self.configDict.get(TIMEOUT),
-                            os.path.join(rawData, self._getConfValue(GAIN_PAT))))
+                            gainPath))
 
         manager = Manager()
         project = manager.createProject(projName, location=scipionProjPath)
@@ -627,6 +630,15 @@ def preprocessWorkflow(project, dataPath, configDict):
 
     # ***********   MOVIES   ***********************************************
     doDose = False if configDict.get(DOSEF) == 0 else True
+    gainGlob = pwutils.glob(pwutils.expandPattern(os.path.join(dataPath,
+                                                     configDict.get(GAIN_PAT))))
+    if len(gainGlob) >= 1:
+        gainFn = gainGlob[0]
+    else:
+        gainFn = ''
+        print(" > No gain file found, proceeding without applay it.")
+    if len(gainGlob) > 1:
+        print(" > More than one gain file found, using only the first.")
     # ----------- IMPORT MOVIES -------------------
     protImport = project.newProtocol(ProtImportMovies,
                               objLabel='import movies',
@@ -639,8 +651,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                               samplingRate=configDict.get(SAMPLING),
                               doseInitial=configDict.get(DOSE0),
                               dosePerFrame=configDict.get(DOSEF),
-                              gainFile=os.path.join(dataPath, 
-                                                    configDict.get(GAIN_PAT)),
+                              gainFile=gainFn,
                               dataStreaming=True,
                               timeout=configDict.get(TIMEOUT))
     _registerProt(protImport, 'outputMovies')
@@ -736,8 +747,8 @@ def preprocessWorkflow(project, dataPath, configDict):
     # Resizing to a sampling rate larger than 3A/px
     downSampPreMics = configDict.get(SAMPLING) / 3 if configDict.get(SAMPLING) < 3 else 1
     # Fixing an even boxsize big enough: int(x/2+1)*2 = ceil(x/2)*2 = even!
-    bxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)
-                 / downSampPreMics / 2 + 1) * 2
+    # bxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)
+    #              / downSampPreMics / 2 + 1) * 2
 
     # --------- PREPROCESS MICS ---------------------------
     protPreMics = project.newProtocol(XmippProtPreprocessMicrographs,
@@ -749,22 +760,6 @@ def preprocessWorkflow(project, dataPath, configDict):
     setExtendedInput(protPreMics.inputMicrographs,
                      protCTFs, 'outputMicrographs')
     _registerProt(protPreMics)
-
-    # --------- PARTICLE PICKING 1 ---------------------------
-    protPP1 = project.newProtocol(SparxGaussianProtPicking,
-                               objLabel='Eman - Sparx auto-picking',
-                               boxSize=bxSize)
-    setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
-    _registerProt(protPP1, 'outputCoordinates')
-
-    # --------- PARTICLE PICKING 2 ---------------------------
-    if configDict.get(CRYOLO) > -1:
-        protPP2 = project.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
-                                      objLabel='Sphire - CrYolo auto-picking',
-                                      # gpuList=configDict.get(CRYOLO),
-                                      boxSize=bxSize)
-        setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
-        _registerProt(protPP2)
 
     if configDict.get(MICS2PICK) > 0:
         # -------- TRIGGER MANUAL-PICKER ---------------------------
@@ -795,6 +790,28 @@ def preprocessWorkflow(project, dataPath, configDict):
                          protPreMics, 'outputMicrographs')
         _registerProt(protPPauto)
 
+    else:
+        # TODO: Put here the box size detector protocol JL Vilas
+        pass
+
+    # --------- PARTICLE PICKING 2 ---------------------------
+    if configDict.get(CRYOLO) > -1:
+        protPP2 = project.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
+                                      objLabel='Sphire - CrYolo auto-picking',
+                                      # gpuList=configDict.get(CRYOLO),
+                                      bxSzFromCoor=True)
+        setExtendedInput(protPP2.coordsToBxSz, protPPman, 'outputCoordinates')
+        setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
+        _registerProt(protPP2)
+
+    # --------- PARTICLE PICKING 1 ---------------------------
+    protPP1 = project.newProtocol(SparxGaussianProtPicking,
+                                  objLabel='Eman - Sparx auto-picking',
+                                  bxSzFromCoor=True)
+    setExtendedInput(protPP1.coordsToBxSz, protPPman, 'outputCoordinates')
+    setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
+    _registerProt(protPP1, 'outputCoordinates')
+
     # --------- CONSENSUS PICKING -----------------------
     pickers = [protPP1]
     pickersOuts = ['outputCoordinates']
@@ -809,16 +826,14 @@ def preprocessWorkflow(project, dataPath, configDict):
         # --------- CONSENSUS PICKING AND -----------------------
         protCPand = project.newProtocol(XmippProtConsensusPicking,
                                         objLabel='Xmipp - consensus picking (AND)',
-                                        consensus=-1,
-                                        consensusRadius=0.1*bxSize)
+                                        consensus=-1)
         setExtendedInput(protCPand.inputCoordinates, pickers, pickersOuts)
         _registerProt(protCPand, 'consensusCoordinates')
 
         # --------- CONSENSUS PICKING OR -----------------------
         protCPor = project.newProtocol(XmippProtConsensusPicking,
                                        objLabel='Xmipp - consensus picking (OR)',
-                                       consensus=1,
-                                       consensusRadius=0.1*bxSize)
+                                       consensus=1)
 
         setExtendedInput(protCPor.inputCoordinates, pickers, pickersOuts)
         _registerProt(protCPor, 'consensusCoordinates')
@@ -835,7 +850,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     ORstr = ' (OR)' if len(pickers) > 1 else ''
     protExtraOR = project.newProtocol(XmippProtExtractParticles,
                                       objLabel='Xmipp - extract particles%s'%ORstr,
-                                      boxSize=bxSize,
+                                      boxSize=-1,
                                       downsampleType=0,  # Same as picking
                                       doRemoveDust=True,
                                       doNormalize=True,
@@ -883,7 +898,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         # --------- EXTRACT PARTICLES AND ----------------------
         protExtract = project.newProtocol(XmippProtExtractParticles,
                                           objLabel='Xmipp - extract particles (AND)',
-                                          boxSize=bxSize,
+                                          boxSize=-1,
                                           downsampleType=0,  # Same as picking
                                           doRemoveDust=True,
                                           doNormalize=True,
@@ -1047,10 +1062,10 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protExtraC)
 
     # --------- EXTRACT FULL SIZE PART ------------------
-    fullBoxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)) + 1
+    # fullBoxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)) + 1
     protExtraFull = project.newProtocol(XmippProtExtractParticles,
                                         objLabel='Xmipp - extract part. FULL SIZE',
-                                        boxSize=fullBoxSize,
+                                        boxSize=-1,
                                         downsampleType=1,  # other mics
                                         doRemoveDust=True,
                                         doNormalize=True,
