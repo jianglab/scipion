@@ -104,7 +104,7 @@ confDict['DOSE0'] = 0
 confDict['DOSEF'] = 0
 confDict['OPTICAL_FLOW'] = False
 confDict['PARTSIZE'] = int(80*3.54)  # in A
-confDict['MICS2PICK'] = 0
+confDict['MICS2PICK'] = 3
 confDict['SYMGROUP'] = 'd2'
 # ----------------------------------------------------- #
 

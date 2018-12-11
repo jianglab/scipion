@@ -629,14 +629,15 @@ def preprocessWorkflow(project, dataPath, configDict):
 
 
     # ***********   MOVIES   ***********************************************
-    doDose = False if configDict.get(DOSEF) == 0 else True
+    doDose = False if configDict.get(DOSEF, 0) == 0 else True
     gainGlob = pwutils.glob(pwutils.expandPattern(os.path.join(dataPath,
-                                                     configDict.get(GAIN_PAT))))
+                                        configDict.get(GAIN_PAT, 'noGain'))))
+    print gainGlob
     if len(gainGlob) >= 1:
         gainFn = gainGlob[0]
     else:
         gainFn = ''
-        print(" > No gain file found, proceeding without applay it.")
+        print(" > No gain file found, proceeding without applying it.")
     if len(gainGlob) > 1:
         print(" > More than one gain file found, using only the first.")
     # ----------- IMPORT MOVIES -------------------
@@ -649,11 +650,11 @@ def preprocessWorkflow(project, dataPath, configDict):
                               sphericalAberration=configDict.get(SPH_AB),
                               voltage=configDict.get(VOL_KV),
                               samplingRate=configDict.get(SAMPLING),
-                              doseInitial=configDict.get(DOSE0),
-                              dosePerFrame=configDict.get(DOSEF),
+                              doseInitial=configDict.get(DOSE0, 0),
+                              dosePerFrame=configDict.get(DOSEF, 0),
                               gainFile=gainFn,
                               dataStreaming=True,
-                              timeout=configDict.get(TIMEOUT))
+                              timeout=configDict.get(TIMEOUT, 43200))  # 12h default
     _registerProt(protImport, 'outputMovies')
 
     # ----------- MOVIE GAIN --------------------------
@@ -666,10 +667,10 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protMG, 'outputImages')
 
     # ----------- MOTIONCOR ----------------------------
-    if configDict.get(MOTIONCOR2) > -1 and ProtMotionCorr is not None:
+    if configDict.get(MOTIONCOR2, -1) > -1 and ProtMotionCorr is not None:
         protMA = project.newProtocol(ProtMotionCorr,
                                      objLabel='MotionCor2 - movie align.',
-                                     gpuList=configDict.get(MOTIONCOR2),
+                                     gpuList=str(configDict.get(MOTIONCOR2)),
                                      doApplyDoseFilter=doDose,
                                      patchX=9, patchY=9)
         setExtendedInput(protMA.inputMovies, protImport, 'outputMovies')
@@ -678,8 +679,8 @@ def preprocessWorkflow(project, dataPath, configDict):
         # ----------- CORR ALIGN ----------------------------
         protMA = project.newProtocol(XmippProtMovieCorr,
                                      objLabel='Xmipp - corr. align.',
-                                     alignFrame0=configDict.get(FRAMES)[0],
-                                     alignFrameN=configDict.get(FRAMES)[1])
+                                     alignFrame0=configDict.get(FRAMES, [1,0])[0],
+                                     alignFrameN=configDict.get(FRAMES, [1,0])[1])
         setExtendedInput(protMA.inputMovies, protImport, 'outputMovies')
         _registerProt(protMA, 'outputMovies')
 
@@ -690,7 +691,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protMax, 'outputMovies')
 
     # ----------- OF ALIGNMENT --------------------------
-    if configDict.get(OPTICAL_FLOW):
+    if configDict.get(OPTICAL_FLOW, -1):
         protOF = project.newProtocol(XmippProtOFAlignment,
                                      objLabel='Xmipp - OF align.',
                                      doApplyDoseFilter=doDose, # --------------- ASK ---------------
@@ -713,10 +714,10 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protCTF1, 'outputCTF')
 
     # --------- CTF ESTIMATION 2 ---------------------------
-    if configDict.get(GCTF) > -1:
+    if configDict.get(GCTF, -1) > -1:
         protCTF2 = project.newProtocol(ProtGctf,
                                        objLabel='gCTF estimation',
-                                       gpuList=configDict.get(GCTF))
+                                       gpuList=str(configDict.get(GCTF)))
         setExtendedInput(protCTF2.inputMicrographs,
                          alignedMicsLastProt, 'outputMicrographs')
         _registerProt(protCTF2)
@@ -761,7 +762,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                      protCTFs, 'outputMicrographs')
     _registerProt(protPreMics)
 
-    if configDict.get(MICS2PICK) > 0:
+    if configDict.get(MICS2PICK, 0) > 0:
         # -------- TRIGGER MANUAL-PICKER ---------------------------
         protTRIG0 = project.newProtocol(XmippProtTriggerData,
                                         objLabel='Xmipp - trigger some mics',
@@ -795,10 +796,10 @@ def preprocessWorkflow(project, dataPath, configDict):
         pass
 
     # --------- PARTICLE PICKING 2 ---------------------------
-    if configDict.get(CRYOLO) > -1:
+    if configDict.get(CRYOLO, -1) > -1:
         protPP2 = project.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
                                       objLabel='Sphire - CrYolo auto-picking',
-                                      # gpuList=configDict.get(CRYOLO),
+                                      # gpuList=str(configDict.get(CRYOLO)),
                                       bxSzFromCoor=True)
         setExtendedInput(protPP2.coordsToBxSz, protPPman, 'outputCoordinates')
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
@@ -815,10 +816,10 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- CONSENSUS PICKING -----------------------
     pickers = [protPP1]
     pickersOuts = ['outputCoordinates']
-    if configDict.get(CRYOLO) > -1:
+    if configDict.get(CRYOLO, -1) > -1:
         pickers.append(protPP2)
         pickersOuts.append('outputCoordinates')
-    if configDict.get(MICS2PICK) > 0:
+    if configDict.get(MICS2PICK, 0) > 0:
         pickers.append(protPPauto)
         pickersOuts.append('outputCoordinates')
 
@@ -940,7 +941,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- TRIGGER PARTS ---------------------------
     protTRIG2 = project.newProtocol(XmippProtTriggerData,
                                     objLabel='Xmipp - trigger data to classify',
-                                    outputSize=configDict.get(PARTS2CLASS),
+                                    outputSize=configDict.get(PARTS2CLASS, 5000),
                                     delay=30,
                                     allImages=False)
     setExtendedInput(protTRIG2.inputImages, protSCR, 'outputParticles')
@@ -951,7 +952,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                  objLabel='Xmipp - Cl2d',
                                  doCore=False,
                                  numberOfClasses=16,
-                                 numberOfMpi=int(configDict.get(NUM_CPU) / 2))
+                                 numberOfMpi=int(configDict.get(NUM_CPU, 8) / 2))
     setExtendedInput(protCL.inputParticles, protTRIG2, 'outputParticles')
     _registerProt(protCL)
 
@@ -965,10 +966,10 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- Relion 2D classify ---------------------------
     protCL2 = project.newProtocol(ProtRelionClassify2D,
                                   objLabel='Relion - 2D classifying',
-                                  doGpu=configDict.get(RELION) > -1,
-                                  gpusToUse=configDict.get(RELION),
+                                  doGpu=configDict.get(RELION, -1) > -1,
+                                  gpusToUse=str(configDict.get(RELION, 0)),
                                   numberOfClasses=16,
-                                  numberOfMpi=int(configDict.get(NUM_CPU) / 2))
+                                  numberOfMpi=int(configDict.get(NUM_CPU, 8) / 2))
     setExtendedInput(protCL2.inputParticles, protTRIG2, 'outputParticles')
     _registerProt(protCL2)
 
@@ -991,31 +992,31 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- EMAN INIT VOLUME ---------------------------
     protINITVOL = project.newProtocol(EmanProtInitModel,
                                       objLabel='Eman - Initial vol',
-                                      symmetryGroup=configDict.get(SYMGROUP),
-                                      numberOfThreads=int(configDict.get(NUM_CPU) / 4))
+                                      symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                      numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
     setExtendedInput(protINITVOL.inputSet, protJOIN, 'outputSet')
     _registerProt(protINITVOL)
 
     # --------- RECONSTRUCT SIGNIFICANT ---------------------------
     protSIG = project.newProtocol(XmippProtReconstructSignificant,
                                   objLabel='Xmipp - Recons. significant',
-                                  symmetryGroup=configDict.get(SYMGROUP),
-                                  numberOfMpi=int(configDict.get(NUM_CPU) / 2))
+                                  symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                  numberOfMpi=int(configDict.get(NUM_CPU, 8) / 2))
     setExtendedInput(protSIG.inputSet, protJOIN, 'outputSet')
     _registerProt(protSIG)
 
     # --------- RECONSTRUCT RANSAC ---------------------------
     protRAN = project.newProtocol(XmippProtRansac,
                                   objLabel='Xmipp - Ransac significant',
-                                  symmetryGroup=configDict.get(SYMGROUP),
-                                  numberOfThreads=int(configDict.get(NUM_CPU) / 4))
+                                  symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                  numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
     setExtendedInput(protRAN.inputSet, protJOIN, 'outputSet')
     _registerProt(protRAN)
 
     # --------- CREATING AN ALIGNED SET OF VOLUMES -----------
     protAVOL = project.newProtocol(XmippProtAlignVolume,
                                    objLabel='Xmipp - Join/Align volumes',
-                                   numberOfThreads=configDict.get(NUM_CPU))
+                                   numberOfThreads=configDict.get(NUM_CPU, 8))
     setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
     setExtendedInput(protAVOL.inputVolumes,
                      [protINITVOL, protRAN, protSIG],
@@ -1025,8 +1026,8 @@ def preprocessWorkflow(project, dataPath, configDict):
     # --------- SWARM CONSENSUS INITIAL VOLUME ---------------
     protSWARM = project.newProtocol(XmippProtReconstructSwarm,
                                     objLabel='Xmipp - Swarm init. vol.',
-                                    symmetryGroup=configDict.get(SYMGROUP),
-                                    numberOfMpi=configDict.get(NUM_CPU))
+                                    symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                    numberOfMpi=configDict.get(NUM_CPU, 8))
     setExtendedInput(protSWARM.inputParticles, protTRIG2, 'outputParticles')
     setExtendedInput(protSWARM.inputVolumes, protAVOL, 'outputVolumes')
     _registerProt(protSWARM, 'outputVolume')
@@ -1047,7 +1048,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                        objLabel='Scipion - Streamer',
                                        input2dProtocol=protCL2,
                                        batchSize=2000,
-                                       startingNumber=configDict.get(PARTS2CLASS),
+                                       startingNumber=configDict.get(PARTS2CLASS, 5000),
                                        samplingInterval=1)
     setExtendedInput(protStreamer.inputParticles, protSCRor, 'outputParticles')
     protStreamer.addPrerequisites(protCL2.getObjId())
