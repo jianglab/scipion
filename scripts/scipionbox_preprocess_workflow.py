@@ -76,7 +76,7 @@ try:
     from xmipp3.protocols import (XmippProtOFAlignment, XmippProtMovieGain,
                                   XmippProtMovieMaxShift, XmippProtCTFMicrographs,
                                   XmippProtMovieCorr, XmippProtCTFConsensus,
-                                  XmippProtPreprocessMicrographs,
+                                  XmippProtPreprocessMicrographs, XmippProtParticleBoxsize,
                                   XmippProtParticlePicking, XmippParticlePickingAutomatic,
                                   XmippProtConsensusPicking, XmippProtCL2D,
                                   XmippProtExtractParticles, XmippProtTriggerData,
@@ -768,32 +768,36 @@ def preprocessWorkflow(project, dataPath, configDict):
                                         objLabel='Xmipp - trigger some mics',
                                         outputSize=configDict.get(MICS2PICK),
                                         delay=30,
-                                        allImages=False)
+                                        allImages=configDict.get(WAIT2PICK, True))
         setExtendedInput(protTRIG0.inputImages, protPreMics, 'outputMicrographs')
         _registerProt(protTRIG0)
 
         # -------- XMIPP MANUAL-PICKER -------------------------
-        protPPman = project.newProtocol(XmippProtParticlePicking,
-                                        objLabel='Xmipp - manual picking',
-                                        doInteractive=False)
-        setExtendedInput(protPPman.inputMicrographs,
+        protPrePick = project.newProtocol(XmippProtParticlePicking,
+                                          objLabel='Xmipp - manual picking',
+                                          doInteractive=False)
+        setExtendedInput(protPrePick.inputMicrographs,
                          protTRIG0, 'outputMicrographs')
-        _registerProt(protPPman)
+        _registerProt(protPrePick)
 
         # -------- XMIPP AUTO-PICKING ---------------------------
         protPPauto = project.newProtocol(XmippParticlePickingAutomatic,
                                          objLabel='Xmipp - auto picking',
-                                         xmippParticlePicking=protPPman,
+                                         xmippParticlePicking=protPrePick,
                                          micsToPick=1  # other
                                          )
-        protPPauto.addPrerequisites(protPPman.getObjId())
+        protPPauto.addPrerequisites(protPrePick.getObjId())
         setExtendedInput(protPPauto.inputMicrographs,
                          protPreMics, 'outputMicrographs')
         _registerProt(protPPauto)
 
     else:
-        # TODO: Put here the box size detector protocol JL Vilas
-        pass
+        # -------- XMIPP AUTO-BOXSIZE -------------------------
+        protPrePick = project.newProtocol(XmippProtParticleBoxsize,
+                                          objLabel='Xmipp - particle boxsize')
+        setExtendedInput(protPrePick.micrographs,
+                         protPreMics, 'outputMicrographs')
+        _registerProt(protPrePick)
 
     # --------- PARTICLE PICKING 2 ---------------------------
     if configDict.get(CRYOLO, -1) > -1:
@@ -801,7 +805,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                       objLabel='Sphire - CrYolo auto-picking',
                                       # gpuList=str(configDict.get(CRYOLO)),
                                       bxSzFromCoor=True)
-        setExtendedInput(protPP2.coordsToBxSz, protPPman, 'outputCoordinates')
+        setExtendedInput(protPP2.coordsToBxSz, protPrePick, 'outputCoordinates')
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
         _registerProt(protPP2)
 
@@ -809,7 +813,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protPP1 = project.newProtocol(SparxGaussianProtPicking,
                                   objLabel='Eman - Sparx auto-picking',
                                   bxSzFromCoor=True)
-    setExtendedInput(protPP1.coordsToBxSz, protPPman, 'outputCoordinates')
+    setExtendedInput(protPP1.coordsToBxSz, protPrePick, 'outputCoordinates')
     setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
     _registerProt(protPP1, 'outputCoordinates')
 
