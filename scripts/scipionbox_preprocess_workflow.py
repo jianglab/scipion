@@ -590,12 +590,6 @@ def createDictFromConfig():
      by MICROSCOPE:, all variables that are in the GLOBAL section will be
      inherited by default.
     """
-    # Read from config file.
-    confDict = {}
-    cp = SafeConfigParser()
-
-    cp.optionxform = str  # keep case (stackoverflow.com/questions/1611799)
-
     confFile = pw.getConfigPath("scipionbox.conf")
     if not os.path.isfile(confFile):
         print(" > '%s' not found. Please fill a config file with, at least, "
@@ -603,6 +597,10 @@ def createDictFromConfig():
               % (confFile, ', '.join(MANDATORY[0:-1])+' and '+MANDATORY[-1]))
 
     print "Reading conf file: ", confFile
+    # Read from config file.
+    confDict = {}
+    cp = SafeConfigParser()
+    cp.optionxform = str  # keep case (stackoverflow.com/questions/1611799)
     cp.read(confFile)
 
     for section in cp.sections():
