@@ -796,6 +796,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         setExtendedInput(protPPauto.inputMicrographs,
                          protPreMics, 'outputMicrographs')
         _registerProt(protPPauto)
+        boxSizeOutput = 'outputCoordinates'
 
     else:
         # -------- XMIPP AUTO-BOXSIZE -------------------------
@@ -804,6 +805,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         setExtendedInput(protPrePick.micrographs,
                          protCTFs, 'outputMicrographs')
         _registerProt(protPrePick)
+        boxSizeOutput = 'outputBoxsize'
 
     # --------- PARTICLE PICKING 2 ---------------------------
     if configDict.get(CRYOLO, -1) > -1:
@@ -811,7 +813,7 @@ def preprocessWorkflow(project, dataPath, configDict):
                                       objLabel='Sphire - CrYolo auto-picking',
                                       # gpuList=str(configDict.get(CRYOLO)),
                                       bxSzFromCoor=True)
-        setExtendedInput(protPP2.coordsToBxSz, protPrePick, 'outputCoordinates')
+        setExtendedInput(protPP2.coordsToBxSz, protPrePick, boxSizeOutput)
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
         _registerProt(protPP2)
 
@@ -819,7 +821,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protPP1 = project.newProtocol(SparxGaussianProtPicking,
                                   objLabel='Eman - Sparx auto-picking',
                                   bxSzFromCoor=True)
-    setExtendedInput(protPP1.coordsToBxSz, protPrePick, 'outputCoordinates')
+    setExtendedInput(protPP1.coordsToBxSz, protPrePick, 'boxSizeOutput')
     setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
     _registerProt(protPP1, 'outputCoordinates')
 
