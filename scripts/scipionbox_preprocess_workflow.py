@@ -153,6 +153,8 @@ LABELS = {
     GL2D: "GL2D"
 }
 
+MANDATORY = [PATTERN, AMP_CONTR, SPH_AB, VOL_KV, SAMPLING, INV_CONTR]
+
 # desired casting for the parameters (form and config)
 formatConfParameters = {SIMULATION: bool,
                         RAWDATA_SIM: str,
@@ -595,13 +597,19 @@ def createDictFromConfig():
     cp.optionxform = str  # keep case (stackoverflow.com/questions/1611799)
 
     confFile = pw.getConfigPath("scipionbox.conf")
+    if not os.path.isfile(confFile):
+        print(" > '%s' not found. Please fill a config file with, at least, "
+              "the following parameters: \n%s"
+              % (confFile, ', '.join(MANDATORY[0:-1])+' and '+MANDATORY[-1]))
 
     print "Reading conf file: ", confFile
     cp.read(confFile)
 
     for section in cp.sections():
+        print(" - Section: %s" % section)
         for opt in cp.options(section):
             confDict[opt] = cp.get(section, opt)
+            print("    %s: %s" % (opt, confDict[opt]))
 
     return confDict
 
