@@ -802,7 +802,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         protPrePick = project.newProtocol(XmippProtParticleBoxsize,
                                           objLabel='Xmipp - particle boxsize')
         setExtendedInput(protPrePick.micrographs,
-                         protPreMics, 'outputMicrographs')
+                         protCTFs, 'outputMicrographs')
         _registerProt(protPrePick)
 
     # --------- PARTICLE PICKING 2 ---------------------------
