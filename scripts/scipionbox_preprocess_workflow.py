@@ -68,6 +68,8 @@ DogPickerProtPicking = pwutils.importFromPlugin('appion.protocols', 'DogPickerPr
 SparxGaussianProtPicking = pwutils.importFromPlugin('eman2.protocols', 'SparxGaussianProtPicking')
 EmanProtInitModel = pwutils.importFromPlugin('eman2.protocols', 'EmanProtInitModel')
 
+SphireProtCRYOLO = pwutils.importFromPlugin('sphire.protocols', 'SphireProtCRYOLO')
+
 # ProtRelion2Autopick = pwutils.importFromPlugin('relion.protocols', 'ProtRelion2Autopick')
 # ProtRelionExtractParticles = pwutils.importFromPlugin('relion.protocols', 'ProtRelionExtractParticles')
 ProtRelionClassify2D = pwutils.importFromPlugin('relion.protocols', 'ProtRelionClassify2D')
@@ -809,9 +811,10 @@ def preprocessWorkflow(project, dataPath, configDict):
 
     # --------- PARTICLE PICKING 2 ---------------------------
     if configDict.get(CRYOLO, -1) > -1:
-        protPP2 = project.newProtocol(SparxGaussianProtPicking,  # ------------------- Put CrYolo here!!
+        protPP2 = project.newProtocol(SphireProtCRYOLO,  # ------------------- Put CrYolo here!!
                                       objLabel='Sphire - CrYolo auto-picking',
-                                      # gpuList=str(configDict.get(CRYOLO)),
+                                      trainDataset=False,
+                                      gpuList=str(configDict.get(CRYOLO)),
                                       bxSzFromCoor=True)
         setExtendedInput(protPP2.coordsToBxSz, protPrePick, boxSizeOutput)
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
