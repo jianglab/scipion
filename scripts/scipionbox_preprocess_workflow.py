@@ -821,7 +821,7 @@ def preprocessWorkflow(project, dataPath, configDict):
     protPP1 = project.newProtocol(SparxGaussianProtPicking,
                                   objLabel='Eman - Sparx auto-picking',
                                   bxSzFromCoor=True)
-    setExtendedInput(protPP1.coordsToBxSz, protPrePick, 'boxSizeOutput')
+    setExtendedInput(protPP1.coordsToBxSz, protPrePick, boxSizeOutput)
     setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
     _registerProt(protPP1, 'outputCoordinates')
 
