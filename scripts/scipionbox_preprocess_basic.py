@@ -261,9 +261,12 @@ class BoxWizardView(tk.Frame):
         scriptsPath = os.path.join(os.environ.get('SCIPION_HOME'), 'scripts')
 
         if SYM_ACQ:
-            os.system("%s python %s '%s' '%s' &" % (scipion,
-                        os.path.join(scriptsPath, 'simulate_acquisition.py'),
-                        RAW_DATA, self._getValue("Movie's folder")))
+            depositionPath = self._getValue("Movie's folder")
+            pwutils.makeFilePath(depositionPath)
+            os.system("%s python %s '%s' '%s' &"
+                      % (scipion,
+                         os.path.join(scriptsPath, 'simulate_acquisition.py'),
+                         RAW_DATA, depositionPath))
 
         # Create the project
         createProjectScript = os.path.join(scriptsPath, 'create_project.py')
