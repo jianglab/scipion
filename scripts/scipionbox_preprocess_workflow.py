@@ -519,6 +519,7 @@ class BoxWizardView(tk.Frame):
     
     def _createScipionProject(self, projName, dataPath, scipionProjPath):
 
+        print("")
         print("Deposition Path: %s" % dataPath)
         print("Project Name: %s" % projName)
         print("Project Path: %s" % scipionProjPath)
@@ -606,7 +607,7 @@ def createDictFromConfig():
     cp.read(confFile)
 
     for section in cp.sections():
-        print(" - Section: %s" % section)
+        print("\n - %s section - " % section)
         for opt in cp.options(section):
             confDict[opt] = cp.get(section, opt)
             print("    %s: %s" % (opt, confDict[opt]))
