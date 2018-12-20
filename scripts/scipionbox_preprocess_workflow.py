@@ -107,10 +107,13 @@ SYMGROUP = 'SYMGROUP'
 GPU_USAGE = 'GPU_USAGE'
 MOTIONCOR2 = "MOTIONCOR2"
 OPTICAL_FLOW = "OPTICAL_FLOW"
+SPARX = "SPARX"
 GCTF = "GCTF"
 CRYOLO = 'CRYOLO'
 RELION = 'RELION'
 GL2D = 'GL2D'
+EMAN_INITIAL = 'EMAN_INITIAL'
+RANSAC = 'RANSAC'
 
 # Some related environment variables
 DATA_FOLDER = 'DATA_FOLDER'
@@ -151,11 +154,23 @@ LABELS = {
     CRYOLO: "Cryolo",
     RELION: "Relion",
     OPTICAL_FLOW: "Optical Flow",
+    SPARX: 'Eman2 Sparx',
     GCTF: "gCtf",
-    GL2D: "GL2D"
+    GL2D: "GL2D",
+    EMAN_INITIAL: 'Eman Initial Volume',
+    RANSAC: 'Xmipp Ransac'
 }
 
 MANDATORY = [PATTERN, AMP_CONTR, SPH_AB, VOL_KV, SAMPLING, INV_CONTR]
+
+defaultVals = {SIMULATION: False,
+               RAWDATA_SIM: '',
+               GAIN_PAT: '',
+               TIMEOUT: 60,
+               NUM_CPU: 8,
+               PARTS2CLASS: 5000,
+               WAIT2PICK: True
+               }
 
 # desired casting for the parameters (form and config)
 formatConfParameters = {SIMULATION: bool,
@@ -169,7 +184,8 @@ formatConfParameters = {SIMULATION: bool,
                         TIMEOUT: 'splitTimesFloat',
                         INV_CONTR: bool,
                         NUM_CPU: int,
-                        PARTS2CLASS: int}
+                        PARTS2CLASS: int,
+                        WAIT2PICK: bool}
 
 formatsParameters = {#PARTSIZE: int,
                      SYMGROUP: str,
@@ -182,7 +198,10 @@ formatsParameters = {#PARTSIZE: int,
                      GCTF: int,
                      CRYOLO: int,
                      RELION: int,
-                     GL2D: int
+                     GL2D: int,
+                     SPARX: bool,
+                     EMAN_INITIAL: bool,
+                     RANSAC: bool
                      }
 
 class BoxWizardWindow(ProjectBaseWindow):
@@ -312,6 +331,15 @@ class BoxWizardView(tk.Frame):
                              font=self.bigFont)
                 label2.grid(row=r, column=2, sticky='nw', padx=(5, 10), pady=2)
 
+        def _addCheckPair(key, r, lf, col=1):
+            t = LABELS.get(key, key)
+            var = tk.IntVar()
+
+            cb = tk.Checkbutton(lf, text=t, font=self.bigFont, bg='white',
+                                variable=var)
+            self.vars[key] = var
+            self.checkvars.append(key)
+            cb.grid(row=r, column=col, padx=5, sticky='nw')
 
         labelFrame = tk.LabelFrame(frame, text=' General ', bg='white',
                                    font=self.bigFontBold)
@@ -338,9 +366,12 @@ class BoxWizardView(tk.Frame):
         _addPair(FRAMES, 1, labelFrame2, t2='ex: 2-15 (left empty to take all frames)')
         _addPair(DOSE0, 2, labelFrame2, default='0', t2='e/A^2')
         _addPair(DOSEF, 3, labelFrame2, default='0', t2='(if 0, no dose weight is applied)')
-        _addPair(OPTICAL_FLOW, 4, labelFrame2, entry='checkbox')
-        _addPair(MICS2PICK, 5, labelFrame2, t2='(if 0, only automatic picking is done)')
-
+        _addPair(MICS2PICK, 4, labelFrame2, t2='(if 0, only automatic picking is done)')
+        _addPair('Optional protocols:', 5, labelFrame2, entry='empty')
+        _addCheckPair(OPTICAL_FLOW, 5, labelFrame2)
+        _addCheckPair(SPARX, 5, labelFrame2, col=2)
+        _addCheckPair(RANSAC, 6, labelFrame2)
+        _addCheckPair(EMAN_INITIAL, 6, labelFrame2, col=2)
 
         labelFrame3 = tk.LabelFrame(frame, text=' GPU usage ', bg='white',
                                     font=self.bigFontBold)
@@ -442,8 +473,9 @@ class BoxWizardView(tk.Frame):
 
     def castConf(self):
         for var, cast in formatConfParameters.iteritems():
-            value = self._getConfValue(var)
-            # print(" -> %s: %s %s" % (var, type(value), value))
+            default = defaultVals.get(var, None)
+            value = self._getConfValue(var, default)
+            print(" -> %s: %s %s" % (var, type(value), value))
             if cast == 'splitTimesFloat':
                 if "*" in value:
                     newvar = reduce(lambda x, y: float(x)*float(y), value.split('*'))
@@ -478,9 +510,12 @@ class BoxWizardView(tk.Frame):
 
         # Do more checks only if there are not previous errors
         if not errors:
-            # if self.configDict.get(PARTSIZE) == 0:
-            #     errors.append("'%s' should be larger than 0"
-            #                   % LABELS.get(PARTSIZE))
+            if (not self.configDict.get(SPARX) and
+                    self.configDict.get(MICS2PICK) == 0 and
+                    self.configDict.get(CRYOLO) < 0):
+                errors.append("One picker is needed, at least. "
+                              "Choose Sparx, crYOLO or "
+                              "fix some micrographs to manual pick.")
 
 
 
@@ -498,6 +533,7 @@ class BoxWizardView(tk.Frame):
                 if os.path.exists(os.path.join(scipionProjPath, projName)):
                     errors.append("Project path '%s' already exists.\n"
                                   "Change User or Sample name" % projName)
+
 
         if errors:
             errors.insert(0, "*Errors*:")
@@ -593,11 +629,22 @@ def createDictFromConfig():
      by MICROSCOPE:, all variables that are in the GLOBAL section will be
      inherited by default.
     """
+    def fillConfPrint():
+        errorStr = (" > There is some problem reading '%s' config file. "
+                    "Please fill a config file with, at least, "
+                    "the following parameters: \n%s\n"
+                     % (confFile,
+                        ', '.join(MANDATORY[0:-1]) + ' and ' + MANDATORY[-1]))
+        errorStr += (" - Optional parameters: \n%s"
+                     % ', '.join(defaultVals.keys()[0:-1]) + ' and ' +
+                       defaultVals.keys()[-1])
+        print(errorStr)
+        sys.exit(1)
+
     confFile = pw.getConfigPath("scipionbox.conf")
     if not os.path.isfile(confFile):
-        print(" > '%s' not found. Please fill a config file with, at least, "
-              "the following parameters: \n%s"
-              % (confFile, ', '.join(MANDATORY[0:-1])+' and '+MANDATORY[-1]))
+        fillConfPrint()
+
 
     print "Reading conf file: ", confFile
     # Read from config file.
@@ -611,6 +658,10 @@ def createDictFromConfig():
         for opt in cp.options(section):
             confDict[opt] = cp.get(section, opt)
             print("    %s: %s" % (opt, confDict[opt]))
+    print('')
+    for field in MANDATORY:
+        if field not in confDict.keys():
+            fillConfPrint()
 
     return confDict
 
@@ -771,6 +822,9 @@ def preprocessWorkflow(project, dataPath, configDict):
                      protCTFs, 'outputMicrographs')
     _registerProt(protPreMics)
 
+    pickers = []
+    pickersOuts = []
+
     if configDict.get(MICS2PICK, 0) > 0:
         # -------- TRIGGER MANUAL-PICKER ---------------------------
         protTRIG0 = project.newProtocol(XmippProtTriggerData,
@@ -801,6 +855,9 @@ def preprocessWorkflow(project, dataPath, configDict):
         _registerProt(protPPauto)
         boxSizeOutput = 'outputCoordinates'
 
+        pickers.append(protPPauto)
+        pickersOuts.append('outputCoordinates')
+
     else:
         # -------- XMIPP AUTO-BOXSIZE -------------------------
         protPrePick = project.newProtocol(XmippProtParticleBoxsize,
@@ -821,24 +878,22 @@ def preprocessWorkflow(project, dataPath, configDict):
         setExtendedInput(protPP2.inputMicrographs, protPreMics, 'outputMicrographs')
         _registerProt(protPP2)
 
-    # --------- PARTICLE PICKING 1 ---------------------------
-    protPP1 = project.newProtocol(SparxGaussianProtPicking,
-                                  objLabel='Eman - Sparx auto-picking',
-                                  bxSzFromCoor=True)
-    setExtendedInput(protPP1.coordsToBxSz, protPrePick, boxSizeOutput)
-    setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
-    _registerProt(protPP1, 'outputCoordinates')
-
-    # --------- CONSENSUS PICKING -----------------------
-    pickers = [protPP1]
-    pickersOuts = ['outputCoordinates']
-    if configDict.get(CRYOLO, -1) > -1:
         pickers.append(protPP2)
         pickersOuts.append('outputCoordinates')
-    if configDict.get(MICS2PICK, 0) > 0:
-        pickers.append(protPPauto)
+
+    # --------- PARTICLE PICKING 1 ---------------------------
+    if configDict.get(SPARX, True):
+        protPP1 = project.newProtocol(SparxGaussianProtPicking,
+                                      objLabel='Eman - Sparx auto-picking',
+                                      bxSzFromCoor=True)
+        setExtendedInput(protPP1.coordsToBxSz, protPrePick, boxSizeOutput)
+        setExtendedInput(protPP1.inputMicrographs, protPreMics, 'outputMicrographs')
+        _registerProt(protPP1, 'outputCoordinates')
+
+        pickers.append(protPP1)
         pickersOuts.append('outputCoordinates')
 
+    # --------- CONSENSUS PICKING -----------------------
     if len(pickers) > 1:
         # --------- CONSENSUS PICKING AND -----------------------
         protCPand = project.newProtocol(XmippProtConsensusPicking,
@@ -1006,12 +1061,13 @@ def preprocessWorkflow(project, dataPath, configDict):
     # ***************   INITIAL VOLUME   ***********************************
 
     # --------- EMAN INIT VOLUME ---------------------------
-    protINITVOL = project.newProtocol(EmanProtInitModel,
-                                      objLabel='Eman - Initial vol',
-                                      symmetryGroup=configDict.get(SYMGROUP, 'c1'),
-                                      numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
-    setExtendedInput(protINITVOL.inputSet, protJOIN, 'outputSet')
-    _registerProt(protINITVOL)
+    if configDict.get(EMAN_INITIAL, True):
+        protINITVOL = project.newProtocol(EmanProtInitModel,
+                                          objLabel='Eman - Initial vol',
+                                          symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                          numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
+        setExtendedInput(protINITVOL.inputSet, protJOIN, 'outputSet')
+        _registerProt(protINITVOL)
 
     # --------- RECONSTRUCT SIGNIFICANT ---------------------------
     protSIG = project.newProtocol(XmippProtReconstructSignificant,
@@ -1022,31 +1078,36 @@ def preprocessWorkflow(project, dataPath, configDict):
     _registerProt(protSIG)
 
     # --------- RECONSTRUCT RANSAC ---------------------------
-    protRAN = project.newProtocol(XmippProtRansac,
-                                  objLabel='Xmipp - Ransac significant',
-                                  symmetryGroup=configDict.get(SYMGROUP, 'c1'),
-                                  numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
-    setExtendedInput(protRAN.inputSet, protJOIN, 'outputSet')
-    _registerProt(protRAN)
+    if configDict.get(RANSAC, True):
+        protRAN = project.newProtocol(XmippProtRansac,
+                                      objLabel='Xmipp - Ransac significant',
+                                      symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                      numberOfThreads=int(configDict.get(NUM_CPU, 8) / 4))
+        setExtendedInput(protRAN.inputSet, protJOIN, 'outputSet')
+        _registerProt(protRAN)
 
     # --------- CREATING AN ALIGNED SET OF VOLUMES -----------
-    protAVOL = project.newProtocol(XmippProtAlignVolume,
-                                   objLabel='Xmipp - Join/Align volumes',
-                                   numberOfThreads=configDict.get(NUM_CPU, 8))
-    setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
-    setExtendedInput(protAVOL.inputVolumes,
-                     [protINITVOL, protRAN, protSIG],
-                     ['outputVolumes', 'outputVolumes', 'outputVolume'])
-    _registerProt(protAVOL)
+    if configDict.get(EMAN_INITIAL, 1) or configDict.get(RANSAC, 1):
+        protAVOL = project.newProtocol(XmippProtAlignVolume,
+                                       objLabel='Xmipp - Join/Align volumes',
+                                       numberOfThreads=configDict.get(NUM_CPU, 8))
+        setExtendedInput(protAVOL.inputReference, protSIG, 'outputVolume')
+        setExtendedInput(protAVOL.inputVolumes,
+                         [protINITVOL, protRAN, protSIG],
+                         ['outputVolumes', 'outputVolumes', 'outputVolume'])
+        _registerProt(protAVOL)
 
-    # --------- SWARM CONSENSUS INITIAL VOLUME ---------------
-    protSWARM = project.newProtocol(XmippProtReconstructSwarm,
-                                    objLabel='Xmipp - Swarm init. vol.',
-                                    symmetryGroup=configDict.get(SYMGROUP, 'c1'),
-                                    numberOfMpi=configDict.get(NUM_CPU, 8))
-    setExtendedInput(protSWARM.inputParticles, protTRIG2, 'outputParticles')
-    setExtendedInput(protSWARM.inputVolumes, protAVOL, 'outputVolumes')
-    _registerProt(protSWARM, 'outputVolume')
+        # --------- SWARM CONSENSUS INITIAL VOLUME ---------------
+        protSWARM = project.newProtocol(XmippProtReconstructSwarm,
+                                        objLabel='Xmipp - Swarm init. vol.',
+                                        symmetryGroup=configDict.get(SYMGROUP, 'c1'),
+                                        numberOfMpi=configDict.get(NUM_CPU, 8))
+        setExtendedInput(protSWARM.inputParticles, protTRIG2, 'outputParticles')
+        setExtendedInput(protSWARM.inputVolumes, protAVOL, 'outputVolumes')
+        _registerProt(protSWARM, 'outputVolume')
+
+    else:  # if no swarm, Significance is the last initVolume
+        protSWARM = protSIG
 
     # --------- RESIZE THE INITIAL VOL TO FULL SIZE ----------
     protVOLfull = project.newProtocol(XmippProtCropResizeVolumes,

@@ -73,9 +73,13 @@ t = aTime / n
 
 if gain is not None:
     outputPath = os.path.join(outputDir, os.path.basename(gain))
-    print "Linking %s -> %s" % (outputPath, gain)
-    pwutils.cleanPath(outputPath)
-    pwutils.createAbsLink(gain, outputPath)
+    if not os.path.isdir(outputDir):
+        print "Linking %s -> %s" % (outputPath, gain)
+        pwutils.cleanPath(outputPath)
+        try:
+            pwutils.createAbsLink(gain, outputPath)
+        except:
+            print("No gain image found.")
 
 for f in inputFiles:
     outputPath = os.path.join(outputDir, os.path.basename(f))
