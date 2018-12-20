@@ -27,7 +27,7 @@
         "scannedPixelSize": 7.0,
         "doseInitial": "~Initial dose|0.0|4~",
         "dosePerFrame": "~Dose per frame|0.0|4~",
-        "gainFile": null,
+        "gainFile": "~Gain's path|%(SCIPION_TESTS)s/relion13_tutorial/betagal/Micrographs/gain.mrc|2~",
         "darkFile": null,
         "dataStreaming": true,
         "timeout": 43200,
@@ -52,7 +52,7 @@
         "runMode": 0,
         "frameStep": 5,
         "movieStep": 250,
-        "useExistingGainImage": false,
+        "useExistingGainImage": true,
         "hostName": "localhost",
         "numberOfThreads": 1,
         "numberOfMpi": 1,
@@ -278,7 +278,7 @@
             "335",
             "229",
             "112",
-            "2"
+            "80"
         ],
         "samplingInterval": 60,
         "stddevValue": 0.04,

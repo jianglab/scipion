@@ -29,6 +29,7 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import sys
+import json
 
 """
 Creates a scipion workflow file (json formatted) base on a template.
@@ -65,7 +66,8 @@ MESSAGE = 'Message'
 PROJECT_PATTERN = "^\w{2}\d{4,6}-\d+$"
 PROJECT_REGEX = re.compile(PROJECT_PATTERN)
 
-JSON_FN = ''
+# if no config file is provided, this default is used
+JSON_FN = 'config/workflows/workflow_scipionbox.json'
 SYM_ACQ = False
 RAW_DATA = ''
 
@@ -237,7 +239,9 @@ class BoxWizardView(tk.Frame):
             if not field.validate():
                 errors.append("%s value does not validate. Value: %s, Type: %s"
                               % (field.getTitle(), field.getValue(),
-                                 field.getType()))
+                                 field.getTypeName()))
+                if field.getType() == FIELD_TYPE_PATH:
+                    errors.append("Check that %s exists." % field.getValue())
 
         # Do more checks only if there are not previous errors
         if errors:
@@ -294,6 +298,8 @@ class BoxWizardView(tk.Frame):
             os.write(fileHandle, finalJson)
             os.close(fileHandle)
 
+            ensureStreaming(path)
+
             print("New workflow saved at " + path)
 
         except Exception as e:
@@ -303,6 +309,18 @@ class BoxWizardView(tk.Frame):
             return None
 
         return path
+
+def ensureStreaming(jsonFn):
+    with open(jsonFn) as jsonFile:
+        data = json.load(jsonFile)
+        isStreaming = data[0]['dataStreaming']
+
+    if not isStreaming:
+        print("Template not in streaming: automatic change activated.")
+        data[0]['dataStreaming'] = True
+        with open(jsonFn, 'w') as outfile:
+            json.dump(data, outfile)
+
 
 
 class FormField(object):
@@ -321,6 +339,9 @@ class FormField(object):
     def getType(self):
         return self._type
 
+    def getTypeName(self):
+        return STRING_FIELDS.get(self.getType(), None)
+
     def getValue(self):
         return self._value
 
@@ -338,7 +359,12 @@ FIELD_TYPE_BOOLEAN = "1"
 FIELD_TYPE_PATH = "2"
 FIELD_TYPE_INTEGER = "3"
 FIELD_TYPE_DECIMAL = "4"
-
+STRING_FIELDS = {FIELD_TYPE_STR: "String",
+                 FIELD_TYPE_BOOLEAN: "Boolean",
+                 FIELD_TYPE_DECIMAL: "Float",
+                 FIELD_TYPE_INTEGER: "Integer",
+                 FIELD_TYPE_PATH: "Path",
+                 }
 
 """ VALIDATION METHODS"""
 def validate(value, fieldType):
@@ -446,7 +472,6 @@ if __name__ == "__main__":
     if n > 2:
         usage("Wrong number of inputs.", True)
     elif n < 2:
-        JSON_FN = 'config/workflows/workflow_scipionbox.json'
         print("No json provided, using the default one at: \n  '%s'"
               %JSON_FN)
 
