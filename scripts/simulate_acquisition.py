@@ -77,7 +77,7 @@ if gain is not None:
         print "Linking %s -> %s" % (outputPath, gain)
         pwutils.cleanPath(outputPath)
         try:
-            pwutils.createAbsLink(gain, outputPath)
+            pwutils.createLink(gain, outputPath)
         except:
             print("No gain image found.")
 
@@ -89,4 +89,4 @@ for f in inputFiles:
         open(outputPath, 'w').close()
         time.sleep(t)
     pwutils.cleanPath(outputPath)
-    pwutils.createAbsLink(f, outputPath)
+    pwutils.createLink(f, outputPath)

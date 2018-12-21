@@ -739,7 +739,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         # ----------- CORR ALIGN ----------------------------
         protMA = project.newProtocol(XmippProtMovieCorr,
                                      objLabel='Xmipp - corr. align.',
-                                     numberOfThreads=4,
+                                     numberOfThreads=8,
                                      alignFrame0=configDict.get(FRAMES, [1,0])[0],
                                      alignFrameN=configDict.get(FRAMES, [1,0])[1])
         setExtendedInput(protMA.inputMovies, protImport, 'outputMovies')
