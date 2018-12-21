@@ -739,6 +739,7 @@ def preprocessWorkflow(project, dataPath, configDict):
         # ----------- CORR ALIGN ----------------------------
         protMA = project.newProtocol(XmippProtMovieCorr,
                                      objLabel='Xmipp - corr. align.',
+                                     numberOfThreads=4,
                                      alignFrame0=configDict.get(FRAMES, [1,0])[0],
                                      alignFrameN=configDict.get(FRAMES, [1,0])[1])
         setExtendedInput(protMA.inputMovies, protImport, 'outputMovies')
@@ -806,7 +807,7 @@ def preprocessWorkflow(project, dataPath, configDict):
 
     # *************   PICKING   ********************************************
     # Resizing to a sampling rate larger than 3A/px
-    downSampPreMics = configDict.get(SAMPLING) / 3 if configDict.get(SAMPLING) < 3 else 1
+    downSampPreMics = 3. / configDict.get(SAMPLING) if configDict.get(SAMPLING) < 3 else 1
     # Fixing an even boxsize big enough: int(x/2+1)*2 = ceil(x/2)*2 = even!
     # bxSize = int(configDict.get(PARTSIZE) / configDict.get(SAMPLING)
     #              / downSampPreMics / 2 + 1) * 2
